@@ -1,0 +1,80 @@
+# ---------------------------------------------------------------------------
+# AffiliateOS — repository ignore rules
+# Committed before any application code exists. Keep this list narrow and
+# explicit; anything not listed here is intended to be version-controlled.
+# Prisma 7 generated client is build output — see
+# docs/06-PRISMA-7-COMPATIBILITY-ADDENDUM.md §3.4.
+# ---------------------------------------------------------------------------
+
+# Dependencies
+node_modules/
+.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/releases
+!.yarn/plugins
+!.yarn/versions
+
+# Next.js / framework build output
+.next/
+out/
+build/
+dist/
+.turbo/
+.vercel/
+
+# TypeScript artifacts
+*.tsbuildinfo
+next-env.d.ts
+
+# Prisma: generated client, local databases, migration dumps
+**/generated/prisma/
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+prisma/migrations/**/migration_lock.toml.bak
+
+# Environment files and secrets — must never enter Git
+.env
+.env.*
+!.env.example
+!.env.template
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+.secrets/
+credentials.json
+*credentials*.json
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Test and coverage output
+coverage/
+.nyc_output/
+test-results/
+playwright-report/
+blob-report/
+.playwright/
+
+# Local container overrides (may carry credentials or host paths)
+docker-compose.override.yml
+docker-compose.*.local.yml
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+*~
