@@ -5,7 +5,8 @@
 //
 //   withTenant(ctx, fn)   → a client confined to one tenant (Checkpoint 7B, Task C)
 //   systemDb()            → the raw client, for cross-tenant work only
-//   createTenantContext() → mints the branded context `withTenant` accepts
+//   seedPermissionCatalog / createDefaultRolesForWorkspace → RBAC provisioning (P0.6)
+//   createTenantContext() → mints the branded context `withTenant` accepts (P0.8)
 //   checkDatabaseHealth() → a fixed `SELECT 1` liveness probe
 //   disconnectPrisma()    → shutdown helper for scripts and tests
 //
@@ -16,6 +17,7 @@
 
 export { disconnectPrisma } from "./client.js";
 export { checkDatabaseHealth } from "./health.js";
+export { createDefaultRolesForWorkspace, permissionIdFor, seedPermissionCatalog } from "./rbac.js";
 export {
   assertJobTenantContext,
   assertSameTenant,

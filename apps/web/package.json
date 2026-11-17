@@ -8,10 +8,11 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "test": "node --test src/lib/auth/password.test.ts src/lib/auth/csrf.test.ts src/lib/auth/client-ip.test.ts src/lib/auth/rate-limit.test.ts src/lib/auth/session.test.ts src/app/api/auth/__tests__/auth.test.ts"
+    "test": "node --test src/lib/auth/password.test.ts src/lib/auth/csrf.test.ts src/lib/auth/client-ip.test.ts src/lib/auth/rate-limit.test.ts src/lib/auth/session.test.ts src/lib/auth/permission.test.ts src/lib/auth/rbac-matrix.test.ts src/app/api/auth/__tests__/auth.test.ts"
   },
   "dependencies": {
     "@affiliateos/database": "0.0.0",
+    "@affiliateos/permissions": "0.0.0",
     "argon2": "^0.45.2",
     "next": "16.4.6",
     "react": "19.3.1",
