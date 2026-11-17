@@ -1,0 +1,24 @@
+export default function HomePage() {
+  return (
+    <main className="mx-auto flex min-h-screen max-w-2xl flex-col justify-center gap-6 px-6">
+      <p className="text-xs font-medium uppercase tracking-[0.2em] text-slate-400">
+        Phase 1 · Checkpoint 6A
+      </p>
+      <h1 className="text-4xl font-semibold tracking-tight">AffiliateOS</h1>
+      <p className="text-slate-300">
+        Fondasi aplikasi berdiri. Prisma 7 + MariaDB adapter terpasang dan terverifikasi
+        lewat query read-only; belum ada tabel, belum ada migration.
+      </p>
+      <dl className="grid grid-cols-2 gap-4 rounded-lg border border-slate-800 bg-slate-900/60 p-5 text-sm">
+        <div>
+          <dt className="text-slate-400">Database</dt>
+          <dd className="font-mono text-slate-100">affiliateos</dd>
+        </div>
+        <div>
+          <dt className="text-slate-400">Prisma</dt>
+          <dd className="font-mono text-slate-100">7.10.1</dd>
+        </div>
+      </dl>
+    </main>
+  );
+}

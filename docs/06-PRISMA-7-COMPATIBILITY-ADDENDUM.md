@@ -20,7 +20,7 @@
 |---|---|
 | Prisma CLI / Client | 7.10.1 (exact pin) |
 | MariaDB adapter | `@prisma/adapter-mariadb` 7.10.1 |
-| Adapter's underlying driver | `mariadb` 3.5.5 (transitive) |
+| Adapter's underlying driver | `mariadb` 3.5.4 (transitive) — corrected in Checkpoint 6B.1; see §12 |
 | Node.js | v26.13.0 |
 | TypeScript | 7.0.2 |
 | MariaDB server | 11.8.6 active on `127.0.0.1:3306` — **never connected to** |
@@ -54,7 +54,7 @@ only to make the migration delta explicit.
 | Generator | `provider = "prisma-client-js"`, output hidden in `node_modules` | `provider = "prisma-client"`, explicit `output` **required**, emits TypeScript into the repo |
 | Query engine | Rust query engine binary bundled per platform | **Query Compiler enabled**; data access goes through a driver adapter |
 | `new PrismaClient()` | Reads the datasource URL from generated config/env | **Requires** `{ adapter }` or `{ accelerateUrl }`; there is no implicit URL |
-| Database driver | Prisma-owned engine | Vendor driver (`mariadb` 3.5.5) via `@prisma/adapter-mariadb` |
+| Database driver | Prisma-owned engine | Vendor driver (`mariadb` 3.5.4) via `@prisma/adapter-mariadb` |
 | `provider` in schema | `mysql` | still `mysql` (MariaDB is served by the MySQL provider) |
 | Node.js minimum | 18.x era | `^20.19 \|\| ^22.12 \|\| >=24.0` |
 | Studio | bundled with CLI | reported separately by `prisma -v` (0.33.0) |
@@ -190,7 +190,7 @@ Rules established by evidence and existing policy:
 | Decision | Value |
 |---|---|
 | Adapter package | `@prisma/adapter-mariadb` 7.10.1 (pinned to the client version) |
-| Driver | `mariadb` 3.5.5, pulled transitively; import `mariadb` types directly only if it is added as an explicit dependency |
+| Driver | `mariadb` 3.5.4, pulled transitively; import `mariadb` types directly only if it is added as an explicit dependency |
 | Schema provider | `mysql` |
 | Pooling | One pool per process; `connectionLimit` from env, default 5 (web) / 3 (worker) — **not benchmarked** |
 | Time zone | Force UTC on the session (`timezone: "Z"`); all `DATETIME(3)` are UTC by design (`02-DATABASE-DESIGN.md` §1) — **not verified** |
@@ -239,6 +239,11 @@ Rules:
    after a verified backup, never from the web container's entrypoint.
 5. Any `DROP`/narrowing/`NOT NULL`-without-default change requires written approval
    and a documented data-migration step (unchanged from Phase 0).
+6. **Flag rename verified in Checkpoint 6C:** `migrate diff --to-schema-datamodel`
+   was removed in Prisma 7 and now fails with an explicit error; use
+   `--to-schema` / `--from-schema`. The offline command
+   `prisma migrate diff --from-empty --to-schema prisma/schema.prisma --script`
+   works and does not contact any datasource.
 
 ---
 
@@ -388,7 +393,7 @@ Based on the spike (compile + build evidence, not database evidence):
     "react-dom": "19.3.1",
     "@prisma/client": "7.10.1",
     "@prisma/adapter-mariadb": "7.10.1",
-    "mariadb": "3.5.5"
+    "mariadb": "3.5.4"
   },
   "devDependencies": {
     "prisma": "7.10.1",
@@ -407,9 +412,11 @@ Notes on specific choices:
 
 - **`prisma` and `@prisma/client` must stay equal.** 7.10.1 is the only tested
   pair; do not accept the suggested 8.x prerelease.
-- **`mariadb` as a direct dependency** (3.5.5, already transitive): the adapter
-  exposes `mariadb.PoolConfig` types, and relying on a transitive package for
-  imported types is fragile.
+- **`mariadb`**: the adapter declares `mariadb@3.5.4` as an exact dependency, so it
+  is installed transitively and deduped to a single copy. Checkpoint 6B removed the
+  direct pin because this codebase passes a URL string to `PrismaMariaDb` and never
+  imports `mariadb` types; re-add it only if direct type usage appears. `prisma` and
+  `@prisma/client` must stay equal.
 - **`@types/node` 24.10.1** while running Node 26: the runtime works, but no 26.x
   types were validated. Upgrade only with a typecheck run.
 - **No Tailwind config file** is needed (v4 CSS-first); the spike verified
