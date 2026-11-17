@@ -6,6 +6,7 @@
 //   withTenant(ctx, fn)   → a client confined to one tenant (Checkpoint 7B, Task C)
 //   systemDb()            → the raw client, for cross-tenant work only
 //   seedPermissionCatalog / createDefaultRolesForWorkspace → RBAC provisioning (P0.6)
+//   writeAudit()          → the only writer for the append-only audit trail (P0.7)
 //   createTenantContext() → mints the branded context `withTenant` accepts (P0.8)
 //   checkDatabaseHealth() → a fixed `SELECT 1` liveness probe
 //   disconnectPrisma()    → shutdown helper for scripts and tests
@@ -18,6 +19,16 @@
 export { disconnectPrisma } from "./client.js";
 export { checkDatabaseHealth } from "./health.js";
 export { createDefaultRolesForWorkspace, permissionIdFor, seedPermissionCatalog } from "./rbac.js";
+export {
+  AUDIT_ACTION_MAX_LENGTH,
+  AuditInputError,
+  REDACTED,
+  isForbiddenMetadataKey,
+  sanitizeMetadata,
+  writeAudit,
+  type AuditActorType,
+  type WriteAuditInput,
+} from "./audit.js";
 export {
   assertJobTenantContext,
   assertSameTenant,

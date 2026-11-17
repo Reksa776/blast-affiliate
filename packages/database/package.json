@@ -16,7 +16,7 @@
     "validate": "prisma validate",
     "build": "prisma generate && tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "tsc -p tsconfig.json && node --test dist/src",
+    "test": "tsc -p tsconfig.json && node --test --test-force-exit dist/src",
     "verify:db": "tsc -p tsconfig.json && node dist/src/scripts/verify-connection.js",
     "migrate:status": "prisma migrate status",
     "migrate:deploy": "prisma migrate deploy"
