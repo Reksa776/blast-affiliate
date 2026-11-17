@@ -14,13 +14,28 @@
     "generate": "npm run generate --workspace @affiliateos/database",
     "validate": "npm run validate --workspace @affiliateos/database",
     "verify:db": "npm run verify:db --workspace @affiliateos/database",
+    "build:permissions": "npm run build --workspace @affiliateos/permissions",
     "build:database": "npm run build --workspace @affiliateos/database",
-    "typecheck": "npm run build:database && npm run typecheck --workspaces --if-present",
-    "test": "npm run test --workspace @affiliateos/database",
-    "build": "npm run build:database && npm run build --workspace @affiliateos/web"
+    "typecheck": "npm run build:permissions && npm run build:database && npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspace @affiliateos/permissions && npm run test --workspace @affiliateos/database",
+    "dev": "npm run dev:web",
+    "dev:web": "npm run dev --workspace @affiliateos/web",
+    "dev:worker": "npm run dev --workspace @affiliateos/worker",
+    "dev:stack": "concurrently --names web,worker --prefix-colors blue,green --kill-others-on-fail \"npm run dev:web\" \"npm run dev:worker\"",
+    "build:worker": "npm run build --workspace @affiliateos/worker",
+    "start:worker": "npm run start --workspace @affiliateos/worker",
+    "build": "npm run build:permissions && npm run build:database && npm run build --workspace @affiliateos/web",
+    "env:load": "set -a && . ./.env && set +a",
+    "prisma:generate": "npm run env:load && npm run generate --workspace @affiliateos/database",
+    "prisma:status": "npm run env:load && npm run migrate:status --workspace @affiliateos/database",
+    "prisma:deploy": "npm run env:load && npm run migrate:deploy --workspace @affiliateos/database"
   },
   "allowScripts": {
+    "argon2@0.45.2": true,
     "prisma@7.10.1": true,
     "@prisma/engines@7.10.1": true
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.7"
   }
 }
