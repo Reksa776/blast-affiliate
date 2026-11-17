@@ -9,12 +9,20 @@ export default function HomePage() {
         Fondasi aplikasi berdiri: autentikasi, RBAC, isolasi tenant, audit, dan pengelolaan
         workspace/member. Modul absensi GPS, foto, dan revisi kehadiran belum dikerjakan.
       </p>
-      <a
-        className="w-fit rounded-md border border-slate-700 px-4 py-2 text-sm hover:border-slate-500"
-        href="/workspaces"
-      >
-        Open workspaces →
-      </a>
+      <div className="flex flex-wrap gap-2">
+        <a
+          className="w-fit rounded-md border border-slate-700 px-4 py-2 text-sm hover:border-slate-500"
+          href="/sign-in"
+        >
+          Sign in →
+        </a>
+        <a
+          className="w-fit rounded-md border border-slate-700 px-4 py-2 text-sm hover:border-slate-500"
+          href="/workspaces"
+        >
+          Open workspaces →
+        </a>
+      </div>
       <dl className="grid grid-cols-2 gap-4 rounded-lg border border-slate-800 bg-slate-900/60 p-5 text-sm">
         <div>
           <dt className="text-slate-400">Database</dt>

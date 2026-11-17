@@ -23,6 +23,7 @@ import {
   destroySession,
   validateSession,
 } from "@/lib/auth/session";
+import { enforceApiRateLimit } from "@/lib/rate-limit/middleware";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -36,6 +37,15 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     }
     throw error;
   }
+
+  // Logout is pre-authentication (an anonymous call is a no-op), so the only
+  // available key is the client address.
+  const limited = await enforceApiRateLimit(req, {
+    scope: "ip",
+    key: getClientIp(req),
+    route: "auth.logout",
+  });
+  if (limited !== null) return limited;
 
   const cookieName = getSessionCookieName();
   const token = req.cookies.get(cookieName)?.value;

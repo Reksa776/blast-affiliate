@@ -8,6 +8,7 @@ import { requirePagePermission } from "@/lib/auth/page-auth";
 import { PermissionError } from "@/lib/auth/permission";
 import { tenantContextFor } from "@/lib/auth/route-support";
 import { InviteMemberForm } from "@/components/invite-member-form";
+import { MemberRoleSelect } from "@/components/member-role-select";
 import { listWorkspaceMembers } from "@/lib/workspaces/data";
 
 export const dynamic = "force-dynamic";
@@ -63,6 +64,7 @@ export default async function MembersPage({ params }: PageProps) {
   if (data === null) notFound();
 
   const canInvite = grant.platformAdmin || grant.permissions.includes("member.invite");
+  const canManage = grant.platformAdmin || grant.permissions.includes("member.manage");
   const roles = ALL_ROLES.map((key) => ({ key, label: ROLE_LABELS[key] }));
 
   return (
@@ -97,7 +99,16 @@ export default async function MembersPage({ params }: PageProps) {
                   <div className="text-xs text-slate-400">{member.email}</div>
                 </td>
                 <td className="px-4 py-3 text-slate-300">
-                  {member.roles.map((role) => role.name).join(", ") || "No role"}
+                  {canManage && member.userId !== grant.session.userId ? (
+                    <MemberRoleSelect
+                      workspaceId={data.workspace.id}
+                      memberId={member.id}
+                      currentRole={member.roles[0]?.key ?? ""}
+                      roles={roles}
+                    />
+                  ) : (
+                    member.roles.map((role) => role.name).join(", ") || "No role"
+                  )}
                 </td>
                 <td className="px-4 py-3">
                   <span className="rounded-full border border-slate-700 px-2 py-0.5 text-xs">
@@ -111,11 +122,12 @@ export default async function MembersPage({ params }: PageProps) {
         </table>
       </section>
 
-      <p className="text-xs text-slate-500">
-        Role changes are available through PATCH
-        <span className="font-mono"> /api/workspaces/{"{id}"}/members/{"{memberId}"}/role</span>.
-        This page intentionally does not duplicate that mutation.
-      </p>
+      {canManage ? (
+        <p className="text-xs text-slate-500">
+          A role change revokes every live session of the affected member; they must sign
+          in again. Your own role cannot be changed from here.
+        </p>
+      ) : null}
     </main>
   );
 }

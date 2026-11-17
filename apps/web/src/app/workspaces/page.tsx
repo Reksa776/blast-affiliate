@@ -18,6 +18,12 @@ export default async function WorkspacesPage() {
         <main className="mx-auto flex min-h-screen max-w-2xl flex-col justify-center gap-4 px-6">
           <h1 className="text-2xl font-semibold">Workspaces</h1>
           <p className="text-slate-300">Your session is missing or has expired. Sign in first.</p>
+          <Link
+            className="w-fit rounded-md border border-slate-700 px-4 py-2 text-sm hover:border-slate-500"
+            href="/sign-in"
+          >
+            Go to sign in →
+          </Link>
         </main>
       );
     }

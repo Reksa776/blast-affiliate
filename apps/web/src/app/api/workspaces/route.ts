@@ -55,6 +55,7 @@ import {
   workspaceMutationRateLimit,
   workspaceRateLimitResponse,
 } from "@/lib/auth/workspace-rate-limit";
+import { enforceApiRateLimit } from "@/lib/rate-limit/middleware";
 import { listWorkspacesForUser } from "@/lib/workspaces/data";
 
 export const runtime = "nodejs";
@@ -63,6 +64,14 @@ export const dynamic = "force-dynamic";
 export async function GET(req: NextRequest): Promise<NextResponse> {
   try {
     const session = await requireAuth(req);
+
+    const limited = await enforceApiRateLimit(req, {
+      scope: "user",
+      key: session.userId,
+      route: "workspaces.list",
+    });
+    if (limited !== null) return limited;
+
     const workspaces = await listWorkspacesForUser(session);
     return NextResponse.json({ workspaces }, { status: 200, headers: NO_STORE });
   } catch (error) {
@@ -74,6 +83,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
     const session = await requireAuth(req);
     verifyCsrf(req);
+
+    const limited = await enforceApiRateLimit(req, {
+      scope: "user",
+      key: session.userId,
+      route: "workspaces.create",
+    });
+    if (limited !== null) return limited;
 
     // Per-user, shared across workspace mutations (Phase 2, item 2.4).
     const limit = workspaceMutationRateLimit(session.userId);

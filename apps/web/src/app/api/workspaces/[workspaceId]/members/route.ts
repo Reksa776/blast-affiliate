@@ -48,6 +48,7 @@ import {
   workspaceMutationRateLimit,
   workspaceRateLimitResponse,
 } from "@/lib/auth/workspace-rate-limit";
+import { enforceApiRateLimit } from "@/lib/rate-limit/middleware";
 import { listWorkspaceMembers } from "@/lib/workspaces/data";
 
 export const runtime = "nodejs";
@@ -70,6 +71,14 @@ export async function GET(
 
     // 401 for no session, 403 for both "not a member" and "no such workspace".
     const grant = await requirePermission(req, workspaceId, "member.read");
+
+    const limited = await enforceApiRateLimit(req, {
+      scope: "user",
+      key: grant.session.userId,
+      route: "members.list",
+    });
+    if (limited !== null) return limited;
+
     const ctx = tenantContextFor(
       grant,
       grant.member?.tenantId ?? workspaceId,
@@ -104,6 +113,13 @@ export async function POST(
     // Auth + authorization first: without a membership there is nothing to scope.
     const grant = await requirePermission(req, workspaceId, "member.invite");
     verifyCsrf(req);
+
+    const limited = await enforceApiRateLimit(req, {
+      scope: "user",
+      key: grant.session.userId,
+      route: "members.invite",
+    });
+    if (limited !== null) return limited;
 
     const limit = workspaceMutationRateLimit(grant.session.userId);
     if (!limit.allowed) return workspaceRateLimitResponse(limit);

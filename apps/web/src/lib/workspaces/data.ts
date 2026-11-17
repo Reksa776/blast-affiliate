@@ -168,6 +168,86 @@ export async function readOfficeSettings(
   });
 }
 
+export type AuditLogSummary = {
+  id: string;
+  createdAt: Date;
+  actorType: string;
+  actorUserId: string | null;
+  action: string;
+  resourceType: string;
+  resourceId: string | null;
+  ipHash: Uint8Array | null;
+  metadata: unknown;
+};
+
+export type AuditLogQuery = {
+  action?: string;
+  /** Resolved by the page from the actor filter; empty means "no match". */
+  actorUserIds?: string[];
+  from?: Date;
+  to?: Date;
+  page: number;
+  pageSize: number;
+};
+
+export type AuditLogPage = {
+  rows: AuditLogSummary[];
+  total: number;
+  page: number;
+  pageSize: number;
+};
+
+/**
+ * Audit rows for the tenant carried by `ctx`, newest first.
+ *
+ * Read-only: `AuditLog` is append-only in both the tenant extension and the
+ * database grant, so `withTenant` allows `findMany`/`count` and refuses writes.
+ * The actor filter has already been resolved to user ids by the page, because
+ * `users` is platform-global and must not be joined through a tenant client.
+ */
+export async function listAuditLogs(
+  db: TenantScopedPrisma,
+  query: AuditLogQuery,
+): Promise<AuditLogPage> {
+  const where = {
+    ...(query.action === undefined ? {} : { action: { contains: query.action } }),
+    ...(query.actorUserIds === undefined || query.actorUserIds.length === 0
+      ? {}
+      : { actorUserId: { in: query.actorUserIds } }),
+    ...(query.from === undefined && query.to === undefined
+      ? {}
+      : {
+          createdAt: {
+            ...(query.from === undefined ? {} : { gte: query.from }),
+            ...(query.to === undefined ? {} : { lte: query.to }),
+          },
+        }),
+  };
+
+  const [rows, total] = await Promise.all([
+    db.auditLog.findMany({
+      where,
+      select: {
+        id: true,
+        createdAt: true,
+        actorType: true,
+        actorUserId: true,
+        action: true,
+        resourceType: true,
+        resourceId: true,
+        ipHash: true,
+        metadata: true,
+      },
+      orderBy: { createdAt: "desc" },
+      skip: (query.page - 1) * query.pageSize,
+      take: query.pageSize,
+    }),
+    db.auditLog.count({ where }),
+  ]);
+
+  return { rows, total, page: query.page, pageSize: query.pageSize };
+}
+
 /** The standard context for an already-authorized grant (API and pages). */
 export function tenantContextForWorkspace(
   tenantId: string,

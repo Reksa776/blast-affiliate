@@ -27,7 +27,7 @@ import { systemDb, writeAudit } from "@affiliateos/database";
 import { CsrfError, verifyCsrf } from "@/lib/auth/csrf";
 import { getClientIp } from "@/lib/auth/middleware";
 import { hashPassword, PASSWORD_MIN_LENGTH } from "@/lib/auth/password";
-import { checkRateLimit } from "@/lib/auth/rate-limit";
+import { consumeRateLimit } from "@/lib/auth/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -69,8 +69,15 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   }
 
   const ip = getClientIp(req);
-  if (!checkRateLimit(`register:${ip}`, REGISTER_LIMIT, REGISTER_WINDOW_MS)) {
-    return fail("Too many requests", 429);
+  const registerLimit = consumeRateLimit(`register:${ip}`, REGISTER_LIMIT, REGISTER_WINDOW_MS);
+  if (!registerLimit.allowed) {
+    return NextResponse.json(
+      { error: "Too many requests" },
+      {
+        status: 429,
+        headers: { ...NO_STORE, "retry-after": String(registerLimit.retryAfterSeconds) },
+      },
+    );
   }
 
   let payload: unknown;

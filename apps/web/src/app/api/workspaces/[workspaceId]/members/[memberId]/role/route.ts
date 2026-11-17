@@ -45,6 +45,7 @@ import {
   workspaceMutationRateLimit,
   workspaceRateLimitResponse,
 } from "@/lib/auth/workspace-rate-limit";
+import { enforceApiRateLimit } from "@/lib/rate-limit/middleware";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -58,6 +59,13 @@ export async function PATCH(
 
     const grant = await requirePermission(req, workspaceId, "member.manage");
     verifyCsrf(req);
+
+    const limited = await enforceApiRateLimit(req, {
+      scope: "user",
+      key: grant.session.userId,
+      route: "members.role",
+    });
+    if (limited !== null) return limited;
 
     const limit = workspaceMutationRateLimit(grant.session.userId);
     if (!limit.allowed) return workspaceRateLimitResponse(limit);

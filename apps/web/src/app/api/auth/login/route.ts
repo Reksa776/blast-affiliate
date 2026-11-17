@@ -22,7 +22,7 @@ import { systemDb, writeAudit } from "@affiliateos/database";
 import { CsrfError, verifyCsrf } from "@/lib/auth/csrf";
 import { getClientIp } from "@/lib/auth/middleware";
 import { verifyPassword } from "@/lib/auth/password";
-import { checkRateLimit } from "@/lib/auth/rate-limit";
+import { consumeRateLimit } from "@/lib/auth/rate-limit";
 import { getSessionCookieName } from "@/lib/auth/cookie-name";
 import { createSession, sessionCookieOptions } from "@/lib/auth/session";
 
@@ -61,8 +61,15 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   }
 
   const ip = getClientIp(req);
-  if (!checkRateLimit(`login:${ip}`, LOGIN_LIMIT, LOGIN_WINDOW_MS)) {
-    return fail("Too many requests", 429);
+  const loginLimit = consumeRateLimit(`login:${ip}`, LOGIN_LIMIT, LOGIN_WINDOW_MS);
+  if (!loginLimit.allowed) {
+    return NextResponse.json(
+      { error: "Too many requests" },
+      {
+        status: 429,
+        headers: { ...NO_STORE, "retry-after": String(loginLimit.retryAfterSeconds) },
+      },
+    );
   }
 
   let payload: unknown;

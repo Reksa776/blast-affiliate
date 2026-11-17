@@ -21,6 +21,7 @@ import { createTenantContext, type TenantContext } from "@affiliateos/database";
 import { ALL_ROLES, type WorkspaceRole } from "@affiliateos/permissions";
 import { NextResponse, type NextRequest } from "next/server";
 
+import { log } from "../logger.ts";
 import { CsrfError } from "./csrf.ts";
 import { getClientIp } from "./client-ip.ts";
 import { AuthError } from "./middleware.ts";
@@ -43,6 +44,17 @@ export function handleRouteError(error: unknown): NextResponse {
   if (error instanceof AuthError) return jsonFail("Unauthorized", error.status);
   if (error instanceof CsrfError) return jsonFail(error.message, 403);
   if (error instanceof PermissionError) return jsonFail("Forbidden", 403);
+
+  // Unexpected failure: the response is deliberately opaque (a driver message can
+  // name tables, hosts or query values), but the operator still needs one line.
+  // `log` redacts credential-shaped keys and text before it reaches stdout.
+  log("error", "route.unhandled", {
+    error:
+      error instanceof Error
+        ? { name: error.name, message: error.message }
+        : { value: String(error) },
+  });
+
   throw error;
 }
 

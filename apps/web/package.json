@@ -8,7 +8,7 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "test": "node --test src/lib/auth/password.test.ts src/lib/auth/csrf.test.ts src/lib/auth/client-ip.test.ts src/lib/auth/rate-limit.test.ts src/lib/auth/session.test.ts src/lib/security-headers.test.ts src/lib/auth/permission.test.ts src/lib/auth/rbac-matrix.test.ts src/app/api/auth/__tests__/auth.test.ts src/app/api/auth/__tests__/auth-audit.test.ts src/app/api/workspaces/__tests__/cross-tenant.test.ts src/app/api/workspaces/__tests__/workspace-audit.test.ts src/app/api/workspaces/__tests__/workspace-rate-limit.test.ts src/app/api/workspaces/__tests__/office-settings.test.ts src/app/api/invitations/__tests__/accept-invitation.test.ts src/app/api/health/__tests__/readiness.test.ts"
+    "test": "node --test src/lib/auth/password.test.ts src/lib/auth/csrf.test.ts src/lib/auth/client-ip.test.ts src/lib/auth/rate-limit.test.ts src/lib/auth/session.test.ts src/lib/security-headers.test.ts src/lib/auth/permission.test.ts src/lib/auth/rbac-matrix.test.ts src/app/api/auth/__tests__/auth.test.ts src/app/api/auth/__tests__/auth-audit.test.ts src/app/api/workspaces/__tests__/cross-tenant.test.ts src/app/api/workspaces/__tests__/workspace-audit.test.ts src/app/api/workspaces/__tests__/workspace-rate-limit.test.ts src/app/api/workspaces/__tests__/office-settings.test.ts src/app/api/invitations/__tests__/accept-invitation.test.ts src/app/api/health/__tests__/readiness.test.ts src/lib/rate-limit/general.test.ts src/lib/logger.test.ts src/app/api/workspaces/__tests__/api-rate-limit.test.ts"
   },
   "dependencies": {
     "@affiliateos/database": "0.0.0",

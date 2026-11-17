@@ -42,6 +42,7 @@ import {
   workspaceMutationRateLimit,
   workspaceRateLimitResponse,
 } from "@/lib/auth/workspace-rate-limit";
+import { enforceApiRateLimit } from "@/lib/rate-limit/middleware";
 import { readOfficeSettings, type OfficeSettings } from "@/lib/workspaces/data";
 
 export const runtime = "nodejs";
@@ -137,6 +138,13 @@ export async function GET(
     const result = await loadOffice(req, workspaceId, "workspace.read");
     if (result.kind === "not-found") return jsonFail("Not found", 404);
 
+    const limited = await enforceApiRateLimit(req, {
+      scope: "user",
+      key: result.ctx.userId,
+      route: "office.read",
+    });
+    if (limited !== null) return limited;
+
     return NextResponse.json(result.office, { status: 200, headers: NO_STORE });
   } catch (error) {
     return handleRouteError(error);
@@ -153,6 +161,22 @@ export async function PATCH(
     if (result.kind === "not-found") return jsonFail("Not found", 404);
 
     verifyCsrf(req);
+
+    // Two independent buckets: the user limit blunts one account, the tenant limit
+    // protects a workspace from being hammered by many of its members at once.
+    const userLimited = await enforceApiRateLimit(req, {
+      scope: "user",
+      key: result.ctx.userId,
+      route: "office.update",
+    });
+    if (userLimited !== null) return userLimited;
+
+    const tenantLimited = await enforceApiRateLimit(req, {
+      scope: "tenant",
+      key: result.ctx.tenantId,
+      route: "office.update",
+    });
+    if (tenantLimited !== null) return tenantLimited;
 
     const limit = workspaceMutationRateLimit(result.ctx.userId);
     if (!limit.allowed) return workspaceRateLimitResponse(limit);

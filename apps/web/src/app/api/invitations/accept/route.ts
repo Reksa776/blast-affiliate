@@ -40,6 +40,7 @@ import {
   NO_STORE,
   readJsonObject,
 } from "@/lib/auth/route-support";
+import { enforceApiRateLimit } from "@/lib/rate-limit/middleware";
 import { tenantContextForWorkspace } from "@/lib/workspaces/data";
 
 export const runtime = "nodejs";
@@ -60,6 +61,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
     const session = await requireAuth(req);
     verifyCsrf(req);
+
+    const limited = await enforceApiRateLimit(req, {
+      scope: "user",
+      key: session.userId,
+      route: "invitations.accept",
+    });
+    if (limited !== null) return limited;
 
     const payload = await readJsonObject(req);
     if (payload === null) return jsonFail("Invalid JSON body", 400);
