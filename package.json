@@ -24,7 +24,7 @@
     "dev:stack": "concurrently --names web,worker --prefix-colors blue,green --kill-others-on-fail \"npm run dev:web\" \"npm run dev:worker\"",
     "build:worker": "npm run build --workspace @affiliateos/worker",
     "start:worker": "npm run start --workspace @affiliateos/worker",
-    "build": "npm run build:permissions && npm run build:database && npm run build --workspace @affiliateos/web",
+    "build": "npm run build:permissions && npm run build:database && npm run build:worker && npm run build --workspace @affiliateos/web",
     "env:load": "set -a && . ./.env && set +a",
     "prisma:generate": "npm run env:load && npm run generate --workspace @affiliateos/database",
     "prisma:status": "npm run env:load && npm run migrate:status --workspace @affiliateos/database",

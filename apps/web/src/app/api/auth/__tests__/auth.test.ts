@@ -46,6 +46,11 @@ process.env.DATABASE_URL = testDatabaseUrl;
 delete process.env.MIGRATE_DATABASE_URL;
 
 const { disconnectPrisma, systemDb } = await import("@affiliateos/database");
+// 8C: the cookie name is environment-dependent, so the tests derive it instead of
+// hard-coding the development name. `next dev` runs with NODE_ENV=development.
+const { getSessionCookieName } = await import("../../../../lib/auth/cookie-name.ts");
+const { hashToken } = await import("../../../../lib/auth/session.ts");
+const SESSION_COOKIE = getSessionCookieName();
 
 /**
  * Empties every M1 table in the test database, children first. Order matters: the
@@ -304,11 +309,14 @@ describe("auth API", () => {
     assert.equal("passwordHash" in (body.user ?? {}), false);
 
     const setCookie = setCookieHeaders(response).join("\n");
-    assert.match(setCookie, /session=/);
+    assert.match(setCookie, new RegExp(`${SESSION_COOKIE}=`));
     assert.match(setCookie, /HttpOnly/i);
     assert.match(setCookie, /SameSite=lax/i);
+    assert.match(setCookie, /Path=\//i);
+    assert.match(setCookie, /Max-Age=604800/i, "Max-Age harus sama dengan TTL 7 hari");
+    assert.equal(/Domain=/i.test(setCookie), false, "__Host- melarang Domain");
 
-    sessionCookie = cookieValue(response, "session");
+    sessionCookie = cookieValue(response, SESSION_COOKIE);
     assert.notEqual(sessionCookie, "");
     assert.equal(await systemDb().session.count({ where: { userId } }), 1);
   });
@@ -350,6 +358,10 @@ describe("auth API", () => {
     assert.equal(body.name, "Admin");
   });
 
+  it("nama cookie sesi di environment test/dev adalah aos_session (tanpa __Host-)", () => {
+    assert.equal(SESSION_COOKIE, "aos_session");
+  });
+
   it("POST /api/auth/logout dengan CSRF → 204 dan cookie dikosongkan", async () => {
     const response = await post(
       "/api/auth/logout",
@@ -360,7 +372,7 @@ describe("auth API", () => {
     assert.equal(response.status, 204);
 
     const setCookie = setCookieHeaders(response).join("\n");
-    assert.match(setCookie, /session=;/);
+    assert.match(setCookie, new RegExp(`${SESSION_COOKIE}=;`));
     assert.match(setCookie, /Max-Age=0/i);
     assert.equal(await systemDb().session.count({ where: { userId } }), 0);
   });
@@ -369,6 +381,30 @@ describe("auth API", () => {
     const response = await fetch(`${BASE}/api/auth/me`, { headers: { cookie: sessionCookie } });
 
     assert.equal(response.status, 401);
+  });
+
+  it("sesi idle 25 jam → 401 dan barisnya dihapus (idle timeout)", async () => {
+    const login = await post("/api/auth/login", { email: EMAIL, password: PASSWORD }, { ip: IP_LOGIN, csrf });
+    assert.equal(login.status, 200);
+
+    const idleCookie = cookieValue(login, SESSION_COOKIE);
+    assert.notEqual(idleCookie, "");
+    const token = idleCookie.slice(SESSION_COOKIE.length + 1);
+
+    // Simulate 25 hours of inactivity by moving the stored last_seen_at, not by
+    // waiting: the route reads the row exactly as it would in production.
+    await systemDb().session.updateMany({
+      where: { tokenHash: hashToken(token) },
+      data: { lastSeenAt: new Date(Date.now() - 25 * 60 * 60 * 1000) },
+    });
+
+    const me = await fetch(`${BASE}/api/auth/me`, { headers: { cookie: idleCookie } });
+    assert.equal(me.status, 401);
+    assert.equal(
+      await systemDb().session.count({ where: { tokenHash: hashToken(token) } }),
+      0,
+      "sesi idle harus dihapus saat validasi",
+    );
   });
 
   it("rate limit: percobaan login ke-11 dari IP yang sama → 429 (walau CSRF valid)", async () => {

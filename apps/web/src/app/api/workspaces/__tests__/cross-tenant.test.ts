@@ -40,6 +40,8 @@ const { clearTestDatabase, prepareTestDatabase } = await import(
   "../../../../lib/auth/test-fixtures.ts"
 );
 const { createSession } = await import("../../../../lib/auth/session.ts");
+const { getSessionCookieName } = await import("../../../../lib/auth/cookie-name.ts");
+const SESSION_COOKIE = getSessionCookieName();
 
 const PORT = 3419;
 const BASE = `http://127.0.0.1:${PORT}`;
@@ -115,6 +117,20 @@ async function fetchCsrf(): Promise<string> {
 
 type RequestOptions = { session?: string; csrf?: string; body?: unknown };
 
+/** Value of the rotated session cookie in a response (8C: workspace create rotates). */
+function sessionTokenFrom(response: Response): string {
+  const headers = response.headers as Headers & { getSetCookie?: () => string[] };
+  const all =
+    typeof headers.getSetCookie === "function" ? headers.getSetCookie() : [headers.get("set-cookie") ?? ""];
+
+  for (const cookie of all) {
+    if (!cookie.startsWith(`${SESSION_COOKIE}=`)) continue;
+    const pair = cookie.split(";")[0] ?? "";
+    return pair.slice(SESSION_COOKIE.length + 1);
+  }
+  return "";
+}
+
 async function api(method: string, path: string, options: RequestOptions = {}): Promise<Response> {
   const headers: Record<string, string> = { "x-forwarded-for": IP };
   const cookies: string[] = [];
@@ -123,7 +139,7 @@ async function api(method: string, path: string, options: RequestOptions = {}): 
     headers["x-csrf-token"] = options.csrf;
     cookies.push(`csrf_token=${options.csrf}`);
   }
-  if (options.session !== undefined) cookies.push(`session=${options.session}`);
+  if (options.session !== undefined) cookies.push(`${SESSION_COOKIE}=${options.session}`);
   if (cookies.length > 0) headers.cookie = cookies.join("; ");
 
   const init: RequestInit = { method, headers };
@@ -173,6 +189,9 @@ describe("cross-tenant E2E (route workspace)", () => {
     const bodyA = (await createdA.json()) as { id: string; slug: string };
     workspaceA.id = bodyA.id;
     workspaceA.slug = bodyA.slug;
+    // 8C: creating a workspace is a privilege change, so the route rotates the
+    // session and returns the new cookie. Every later request uses that token.
+    userA.token = sessionTokenFrom(createdA) || userA.token;
 
     const csrfB = await fetchCsrf();
     const createdB = await api("POST", "/api/workspaces", {
@@ -184,6 +203,7 @@ describe("cross-tenant E2E (route workspace)", () => {
     const bodyB = (await createdB.json()) as { id: string; slug: string };
     workspaceB.id = bodyB.id;
     workspaceB.slug = bodyB.slug;
+    userB.token = sessionTokenFrom(createdB) || userB.token;
 
     const a = await systemDb().workspaceMember.findFirst({
       where: { tenantId: workspaceA.id, userId: userA.userId },
@@ -407,6 +427,85 @@ describe("cross-tenant E2E (route workspace)", () => {
       roles.map((row) => row.role.key),
       ["WORKSPACE_OWNER"],
       "A harus tetap WORKSPACE_OWNER",
+    );
+  });
+
+  it("T11: GET /api/workspaces hanya mengembalikan workspace milik A", async () => {
+    const response = await api("GET", "/api/workspaces", { session: userA.token });
+
+    assert.equal(response.status, 200, await response.clone().text());
+    const body = (await response.json()) as {
+      workspaces: Array<{ id: string; membershipId: string; roles: Array<{ key: string }> }>;
+    };
+
+    assert.deepEqual(
+      body.workspaces.map((workspace) => workspace.id),
+      [workspaceA.id],
+      "daftar A tidak boleh memuat workspace B",
+    );
+    assert.equal(body.workspaces[0]?.membershipId, membershipA.id);
+    assert.deepEqual(
+      body.workspaces[0]?.roles.map((role) => role.key),
+      ["WORKSPACE_OWNER"],
+    );
+
+    const bResponse = await api("GET", "/api/workspaces", { session: userB.token });
+    assert.equal(bResponse.status, 200);
+    const bBody = (await bResponse.json()) as { workspaces: Array<{ id: string }> };
+    assert.deepEqual(
+      bBody.workspaces.map((workspace) => workspace.id),
+      [workspaceB.id],
+    );
+
+    const anonymous = await api("GET", "/api/workspaces");
+    assert.equal(anonymous.status, 401);
+  });
+
+  it("T12: GET member A↔B terisolasi, dan workspace asing identik dengan yang tidak ada", async () => {
+    const own = await api("GET", `/api/workspaces/${workspaceA.id}/members`, {
+      session: userA.token,
+    });
+    assert.equal(own.status, 200, await own.clone().text());
+    const ownBody = (await own.json()) as {
+      workspace: { id: string };
+      members: Array<{ userId: string; roles: Array<{ key: string }> }>;
+    };
+
+    assert.equal(ownBody.workspace.id, workspaceA.id);
+    assert.equal(
+      ownBody.members.some((member) => member.userId === userA.userId),
+      true,
+      "A harus melihat dirinya sebagai member",
+    );
+    assert.equal(
+      ownBody.members.some((member) => member.userId === userB.userId),
+      false,
+      "member workspace B tidak boleh muncul di daftar A",
+    );
+
+    const foreign = await api("GET", `/api/workspaces/${workspaceB.id}/members`, {
+      session: userA.token,
+    });
+    const missing = await api("GET", `/api/workspaces/${missingWorkspaceId}/members`, {
+      session: userA.token,
+    });
+
+    assert.equal(foreign.status, 403);
+    assert.equal(missing.status, 403, "workspace yang tidak ada tidak boleh dibedakan");
+    assert.equal(await foreign.text(), await missing.text(), "body 403 harus identik");
+
+    const bOwn = await api("GET", `/api/workspaces/${workspaceB.id}/members`, {
+      session: userB.token,
+    });
+    assert.equal(bOwn.status, 200);
+    const bOwnBody = (await bOwn.json()) as {
+      workspace: { id: string };
+      members: Array<{ userId: string }>;
+    };
+    assert.equal(bOwnBody.workspace.id, workspaceB.id);
+    assert.equal(
+      bOwnBody.members.some((member) => member.userId === userA.userId),
+      false,
     );
   });
 });

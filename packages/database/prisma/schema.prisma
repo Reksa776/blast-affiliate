@@ -295,6 +295,16 @@ model Workspace {
   name      String          @db.VarChar(160)
   status    WorkspaceStatus @default(ACTIVE)
   plan      WorkspacePlan   @default(INTERNAL)
+
+  // Office settings (Phase 2, migration 20261117120000_p2_office_settings).
+  // `address` is optional because a freshly created workspace has not filled it in.
+  // `work_start`/`work_end` are wall-clock `HH:MM` in `timezone`; there is no
+  // timezone conversion in Phase 2 — attendance scheduling is Phase 3.
+  address   String?         @db.VarChar(255)
+  timezone  String          @default("Asia/Jakarta") @db.VarChar(64)
+  workStart String          @default("09:00") @map("work_start") @db.Char(5)
+  workEnd   String          @default("17:00") @map("work_end") @db.Char(5)
+
   createdAt DateTime        @default(now()) @map("created_at") @db.DateTime(3)
   updatedAt DateTime        @updatedAt @map("updated_at") @db.DateTime(3)
 

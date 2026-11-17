@@ -1,12 +1,20 @@
-// AffiliateOS — opaque session tokens (P0.5).
+// AffiliateOS — opaque session tokens (P0.5, policy hardened in P1 8C).
 //
 // The cookie carries a 32-byte random token; the database stores only its
 // SHA-256 digest. A leaked `sessions` row therefore cannot be replayed: the
 // attacker would need the pre-image, which is not stored anywhere.
 //
+// Session policy (docs/04 §3.4):
+//   - absolute lifetime 7 days (`SESSION_TTL_MS`), fixed at creation;
+//   - idle timeout 24 hours, measured from `last_seen_at`;
+//   - `last_seen_at` is refreshed at most once per hour per session, so a busy
+//     client costs one write an hour instead of one write per request;
+//   - rotation on privilege change (`rotateSession`, `revokeAllSessionsForUser`).
+//
 // Schema notes (verified against prisma/schema.prisma, not assumed):
 //   - `token_hash` is BINARY(32), so the digest is a Buffer, not a hex string;
 //   - `ip_hash` is BINARY(32) as well, so the client IP is hashed, never stored;
+//   - `last_seen_at` is DATETIME(3) NOT NULL with a `now()` default;
 //   - `id` has no database default → a UUID is generated here;
 //   - `user_agent` is VARCHAR(255) → truncated before insert;
 //   - `revoked_at` exists and is honoured on read.
@@ -18,8 +26,10 @@
 import crypto from "node:crypto";
 import { systemDb } from "@affiliateos/database";
 
-export const SESSION_COOKIE_NAME = "session";
-export const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+export const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days, absolute
+export const SESSION_TTL_SECONDS = SESSION_TTL_MS / 1000; // 604800, for Max-Age
+export const IDLE_TIMEOUT_MS = 24 * 60 * 60 * 1000; // 24 hours of inactivity
+export const IDLE_UPDATE_THRESHOLD_MS = 60 * 60 * 1000; // refresh at most hourly
 export const SESSION_TOKEN_BYTES = 32;
 
 export type SessionUser = {
@@ -73,7 +83,8 @@ export async function createSession(
 ): Promise<{ token: string; expiresAt: Date; sessionId: string }> {
   const token = generateSessionToken();
   const tokenHash = hashToken(token);
-  const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + SESSION_TTL_MS);
 
   // SYSTEM: session creation is pre-tenant (the user may have no workspace yet).
   const session = await systemDb().session.create({
@@ -84,6 +95,9 @@ export async function createSession(
       ipHash: hashIp(ip),
       userAgent: userAgent === "" ? null : userAgent.slice(0, 255),
       expiresAt,
+      // Explicit even though the column defaults to now(): the idle window starts
+      // at creation, and a future schema default change must not move it.
+      lastSeenAt: now,
     },
     select: { id: true },
   });
@@ -94,9 +108,15 @@ export async function createSession(
 /**
  * Resolves a cookie token to a live session, or null.
  *
- * Expired rows are deleted on sight (lazy cleanup, TD-7C-A3) and an unknown
- * token, a revoked row and an inactive user all return the same null so the
+ * Rejected sessions: unknown token, revoked row, past the absolute expiry, idle for
+ * more than 24 hours, or owned by a user that is no longer ACTIVE. Expired and idle
+ * rows are deleted on sight (lazy cleanup, TD-7C-A3); a revoked row is kept so the
+ * revocation itself stays auditable. Every rejection returns the same null so the
  * caller cannot tell them apart.
+ *
+ * A live session has its `last_seen_at` refreshed, but only when the stored value is
+ * older than an hour: that keeps the idle window accurate without turning every
+ * authenticated request into a write.
  */
 export async function validateSession(token: string): Promise<ValidatedSession | null> {
   if (typeof token !== "string" || token === "") return null;
@@ -109,6 +129,7 @@ export async function validateSession(token: string): Promise<ValidatedSession |
       userId: true,
       activeTenantId: true,
       expiresAt: true,
+      lastSeenAt: true,
       revokedAt: true,
       user: { select: { id: true, email: true, displayName: true, status: true } },
     },
@@ -117,13 +138,31 @@ export async function validateSession(token: string): Promise<ValidatedSession |
   if (session === null) return null;
   if (session.revokedAt !== null) return null;
 
-  if (session.expiresAt.getTime() <= Date.now()) {
+  const now = Date.now();
+  const lastSeen = session.lastSeenAt.getTime();
+
+  if (session.expiresAt.getTime() <= now) {
     // SYSTEM: expired-session cleanup is not tenant-scoped.
     await systemDb().session.deleteMany({ where: { id: session.id } });
     return null;
   }
 
+  if (now - lastSeen > IDLE_TIMEOUT_MS) {
+    // SYSTEM: idle-session cleanup is not tenant-scoped.
+    await systemDb().session.deleteMany({ where: { id: session.id } });
+    return null;
+  }
+
   if (session.user.status !== "ACTIVE") return null;
+
+  if (now - lastSeen > IDLE_UPDATE_THRESHOLD_MS) {
+    // SYSTEM: last-seen refresh is not tenant-scoped. `updateMany` keeps a session
+    // that was concurrently revoked from throwing: the where clause simply misses.
+    await systemDb().session.updateMany({
+      where: { id: session.id, revokedAt: null },
+      data: { lastSeenAt: new Date(now) },
+    });
+  }
 
   return {
     id: session.id,
@@ -146,13 +185,61 @@ export async function destroySession(token: string): Promise<void> {
   await systemDb().session.deleteMany({ where: { tokenHash: hashToken(token) } });
 }
 
-/** Cookie attributes for a live session. `secure` only outside development. */
+/**
+ * Rotation: revoke the presented session and issue a fresh one for the same user.
+ *
+ * Used when the caller's own privileges change (workspace created, invitation
+ * accepted). The old row is kept with `revoked_at` set — a rotation is a security
+ * event and stays visible in the table — while the new token is returned so the
+ * route can replace the cookie in the same response.
+ */
+export async function rotateSession(
+  oldToken: string,
+  userId: string,
+  ip: string,
+  userAgent: string,
+): Promise<{ token: string; expiresAt: Date; sessionId: string }> {
+  if (typeof oldToken === "string" && oldToken !== "") {
+    // SYSTEM: session rotation revokes the old token before a new one exists.
+    await systemDb().session.updateMany({
+      where: { tokenHash: hashToken(oldToken), revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+  }
+
+  return createSession(userId, ip, userAgent);
+}
+
+/**
+ * Revokes every live session of a user.
+ *
+ * Used when *another* actor changes the user's privileges (role change): their
+ * existing cookies must stop carrying the old authority, and the only safe shape is
+ * to require a fresh login. Sessions are revoked, not deleted, so the trail shows
+ * why the user was signed out.
+ */
+export async function revokeAllSessionsForUser(userId: string): Promise<void> {
+  // SYSTEM: privilege-change revocation is not tenant-scoped.
+  await systemDb().session.updateMany({
+    where: { userId, revokedAt: null },
+    data: { revokedAt: new Date() },
+  });
+}
+
+/**
+ * Cookie attributes for a live session.
+ *
+ * No `Domain` key is ever set: that is required for the `__Host-` prefix and also
+ * correct without it. `maxAge` matches the absolute TTL; `expires` is kept for
+ * clients that ignore `Max-Age`.
+ */
 export function sessionCookieOptions(expiresAt: Date) {
   return {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax" as const,
     path: "/",
+    maxAge: SESSION_TTL_SECONDS,
     expires: expiresAt,
   };
 }

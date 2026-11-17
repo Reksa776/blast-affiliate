@@ -60,7 +60,23 @@ export class TenantWriteScopeError extends Error {
   }
 }
 
-/** Which column carries the tenant. `workspaces` is the tenant, so its key is `id`. */
+/**
+ * Which column carries the tenant.
+ *
+ * `workspaces` IS the tenant, so its key is `id`; every other scoped model uses
+ * `tenant_id`.
+ *
+ * TD-7F-R3 — the Workspace special case, stated explicitly because it surprises
+ * reviewers: the context is always spread LAST into `where` (see
+ * `scopeQueryArgs`). For a model whose scope field is `tenantId`, passing a foreign
+ * id together with a foreign tenant yields no row, because both filters must match.
+ * For `Workspace` the scope field and the row key are the same column, so a foreign
+ * `where.id` is REPLACED by `ctx.tenantId`, not intersected with it. The result is
+ * still fail-closed: a foreign workspace row is never returned. What a caller sees
+ * instead is the context's own workspace (or `null` when that workspace is gone) —
+ * never the row they asked for. This is deliberate; do not "fix" it by spreading the
+ * scope first, which would let a caller select another tenant by id.
+ */
 type TenantScopeField = "tenantId" | "id";
 
 /**
@@ -225,6 +241,11 @@ function scopeQueryArgs(
   const where = (args.where ?? {}) as Record<string, unknown>;
   // The context wins over caller-supplied values: `tenantId: "B"` cannot re-scope
   // the query. Spreading `where` first and the scope last is deliberate.
+  //
+  // Workspace consequence (TD-7F-R3): scope field and row key are both `id`, so a
+  // foreign `where.id` is overwritten by `tenantId`. The foreign row is never
+  // returned; the query either finds the context's own row or nothing. See the
+  // `TenantScopeField` comment above and docs/PHASE-2-WORKSPACE-MEMBER.md §2.5.
   const scoped: QueryArgs = { ...args, where: { ...where, [field]: tenantId } };
 
   if (operation === "upsert") {

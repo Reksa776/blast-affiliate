@@ -7,7 +7,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { checkRateLimit, cleanupRateLimitBuckets, rateLimitBucketCount } from "./rate-limit.ts";
+import { checkRateLimit, cleanupRateLimitBuckets, consumeRateLimit, rateLimitBucketCount } from "./rate-limit.ts";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -44,4 +44,28 @@ test("cleanup menghapus bucket yang sudah expired", async () => {
   await sleep(20);
   cleanupRateLimitBuckets();
   assert.equal(rateLimitBucketCount(), 0);
+});
+
+test("consumeRateLimit melaporkan remaining dan Retry-After", () => {
+  const key = `rl-e-${Date.now()}`;
+  const first = consumeRateLimit(key, 2, 60_000);
+  assert.equal(first.allowed, true);
+  assert.equal(first.remaining, 1);
+  assert.ok(first.retryAfterSeconds >= 1 && first.retryAfterSeconds <= 60);
+
+  const second = consumeRateLimit(key, 2, 60_000);
+  assert.equal(second.allowed, true);
+  assert.equal(second.remaining, 0);
+
+  const third = consumeRateLimit(key, 2, 60_000);
+  assert.equal(third.allowed, false);
+  assert.equal(third.remaining, 0);
+  assert.ok(third.retryAfterSeconds >= 1, "Retry-After tidak boleh 0");
+  assert.ok(third.retryAfterSeconds <= 60);
+});
+
+test("limit non-positif menolak semua permintaan (fail-closed)", () => {
+  const key = `rl-f-${Date.now()}`;
+  assert.equal(consumeRateLimit(key, 0, 1_000).allowed, false);
+  assert.equal(consumeRateLimit(key, -3, 1_000).allowed, false);
 });

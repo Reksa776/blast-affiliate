@@ -23,7 +23,8 @@ import { CsrfError, verifyCsrf } from "@/lib/auth/csrf";
 import { getClientIp } from "@/lib/auth/middleware";
 import { verifyPassword } from "@/lib/auth/password";
 import { checkRateLimit } from "@/lib/auth/rate-limit";
-import { createSession, SESSION_COOKIE_NAME, sessionCookieOptions } from "@/lib/auth/session";
+import { getSessionCookieName } from "@/lib/auth/cookie-name";
+import { createSession, sessionCookieOptions } from "@/lib/auth/session";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -147,7 +148,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     { user: { id: user.id, email: user.email, name: user.displayName } },
     { status: 200, headers: NO_STORE },
   );
-  response.cookies.set(SESSION_COOKIE_NAME, token, sessionCookieOptions(expiresAt));
+  response.cookies.set(getSessionCookieName(), token, sessionCookieOptions(expiresAt));
 
   return response;
 }

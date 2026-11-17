@@ -8,6 +8,7 @@
 //   403 missing CSRF token, or the caller is not a member / lacks `member.manage`
 //   404 the member does not belong to this workspace (same answer for "no such
 //       member" and "member of another workspace" — no existence oracle)
+//   429 per-user workspace-mutation rate limit exhausted
 //
 // Authority: `requirePermission` resolves the caller's membership in `:workspaceId`.
 // The member is then looked up through `withTenant()`, so the scope is merged into
@@ -29,6 +30,7 @@ import { withTenant, writeAudit } from "@affiliateos/database";
 
 import { verifyCsrf } from "@/lib/auth/csrf";
 import { requirePermission } from "@/lib/auth/permission";
+import { revokeAllSessionsForUser } from "@/lib/auth/session";
 import {
   auditActorType,
   auditRequestFields,
@@ -39,6 +41,10 @@ import {
   readJsonObject,
   tenantContextFor,
 } from "@/lib/auth/route-support";
+import {
+  workspaceMutationRateLimit,
+  workspaceRateLimitResponse,
+} from "@/lib/auth/workspace-rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -52,6 +58,9 @@ export async function PATCH(
 
     const grant = await requirePermission(req, workspaceId, "member.manage");
     verifyCsrf(req);
+
+    const limit = workspaceMutationRateLimit(grant.session.userId);
+    if (!limit.allowed) return workspaceRateLimitResponse(limit);
 
     const payload = await readJsonObject(req);
     if (payload === null) return jsonFail("Invalid JSON body", 400);
@@ -72,6 +81,7 @@ export async function PATCH(
         where: { id: memberId },
         select: {
           id: true,
+          userId: true,
           roleAssignments: { select: { role: { select: { key: true } } } },
         },
       });
@@ -104,13 +114,18 @@ export async function PATCH(
       // Drop every other role; the scope extension adds tenantId to this where.
       await db.memberRole.deleteMany({ where: { memberId, roleId: { not: role.id } } });
 
-      return { kind: "changed", previousKeys } as const;
+      return { kind: "changed", previousKeys, targetUserId: member.userId } as const;
     });
 
     if (outcome.kind === "not-found") return jsonFail("Not found", 404);
     if (outcome.kind === "unknown-role") return jsonFail("Unknown role", 400);
 
     if (outcome.kind === "changed") {
+      // Privilege change: every live session of the affected user is revoked, so a
+      // cookie issued under the old role cannot keep exercising it. The caller's own
+      // session is untouched (role change on oneself is refused above anyway).
+      await revokeAllSessionsForUser(outcome.targetUserId);
+
       await writeAudit({
         tenantId: ctx.tenantId,
         actorType: auditActorType(grant),

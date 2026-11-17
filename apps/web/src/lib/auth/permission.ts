@@ -16,12 +16,11 @@
 
 import { systemDb } from "@affiliateos/database";
 import { ALL_PERMISSIONS, isPermission, type Permission } from "@affiliateos/permissions";
-import type { NextRequest } from "next/server";
 
 // Explicit `.ts` extensions: the test harness runs these modules through Node's
 // type stripping, where extensionless specifiers do not resolve. Turbopack accepts
 // them too (verified by `next build`).
-import { requireAuth } from "./middleware.ts";
+import { requireAuth, type SessionCookieRequest } from "./middleware.ts";
 import type { ValidatedSession } from "./session.ts";
 
 export class PermissionError extends Error {
@@ -47,7 +46,7 @@ export type PermissionGrant = {
  * (403) for every authorization failure.
  */
 export async function requirePermission(
-  req: NextRequest,
+  req: SessionCookieRequest,
   tenantId: string,
   permission: Permission,
 ): Promise<PermissionGrant> {

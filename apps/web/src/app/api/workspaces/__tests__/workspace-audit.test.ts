@@ -37,6 +37,8 @@ const { clearTestDatabase, prepareTestDatabase } = await import(
   "../../../../lib/auth/test-fixtures.ts"
 );
 const { createSession } = await import("../../../../lib/auth/session.ts");
+const { getSessionCookieName } = await import("../../../../lib/auth/cookie-name.ts");
+const SESSION_COOKIE = getSessionCookieName();
 
 const PORT = 3420;
 const BASE = `http://127.0.0.1:${PORT}`;
@@ -107,6 +109,20 @@ async function fetchCsrf(): Promise<string> {
 
 type RequestOptions = { session?: string; csrf?: string; body?: unknown; requestId?: string };
 
+/** Value of the rotated session cookie in a response (8C: workspace create rotates). */
+function sessionTokenFrom(response: Response): string {
+  const headers = response.headers as Headers & { getSetCookie?: () => string[] };
+  const all =
+    typeof headers.getSetCookie === "function" ? headers.getSetCookie() : [headers.get("set-cookie") ?? ""];
+
+  for (const cookie of all) {
+    if (!cookie.startsWith(`${SESSION_COOKIE}=`)) continue;
+    const pair = cookie.split(";")[0] ?? "";
+    return pair.slice(SESSION_COOKIE.length + 1);
+  }
+  return "";
+}
+
 async function api(method: string, path: string, options: RequestOptions = {}): Promise<Response> {
   const headers: Record<string, string> = { "x-forwarded-for": IP };
   const cookies: string[] = [];
@@ -116,7 +132,7 @@ async function api(method: string, path: string, options: RequestOptions = {}): 
     headers["x-csrf-token"] = options.csrf;
     cookies.push(`csrf_token=${options.csrf}`);
   }
-  if (options.session !== undefined) cookies.push(`session=${options.session}`);
+  if (options.session !== undefined) cookies.push(`${SESSION_COOKIE}=${options.session}`);
   if (cookies.length > 0) headers.cookie = cookies.join("; ");
 
   const init: RequestInit = { method, headers };
@@ -189,6 +205,8 @@ describe("audit trail dari route workspace", () => {
     const body = (await response.json()) as { id: string; slug: string; name: string };
     workspace.id = body.id;
     workspace.slug = body.slug;
+    // 8C: the create response carries a rotated session; later calls use it.
+    owner.token = sessionTokenFrom(response) || owner.token;
 
     const row = await lastAuditRow();
     assert.equal(row.action, "workspace.create");
@@ -303,6 +321,18 @@ describe("audit trail dari route workspace", () => {
       assignments.map((assignment) => assignment.role.key),
       ["ANALYST"],
       "role lama harus diganti, bukan ditambah",
+    );
+
+    // 8C: a role change revokes every session of the affected user.
+    const targetSessions = await systemDb().session.findMany({
+      where: { userId: target.userId },
+      select: { revokedAt: true },
+    });
+    assert.ok(targetSessions.length > 0, "fixture harus punya sesi untuk target");
+    assert.equal(
+      targetSessions.every((session) => session.revokedAt !== null),
+      true,
+      "role change harus mencabut semua sesi user yang diubah",
     );
   });
 

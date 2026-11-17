@@ -1,22 +1,31 @@
-// POST /api/workspaces/:workspaceId/members — invite by email (P0.8).
+// /api/workspaces/:workspaceId/members — list members and invite by email.
 //
-// Contract:
-//   200 { id, email, roleKey, status: "pending" }
+// GET contract (Phase 2):
+//   200 { workspace: { id, name, slug }, members: [{ id, userId, email, displayName,
+//         status, jobTitle, joinedAt, roles }] }
+//   401 no valid session
+//   403 the caller is not an ACTIVE member with `member.read` — the same fixed body
+//       for "workspace does not exist" and "workspace belongs to someone else"
+//       (fail-closed, TD-7F-R4)
+//
+// POST contract:
+//   200 { id, email, roleKey, status: "pending", ...devEcho }
 //   400 malformed body / invalid email / roleKey outside the enum
 //   401 no valid session
 //   403 missing CSRF token, or the caller is not a member / lacks `member.invite`
 //   404 the workspace does not exist for this caller
 //   409 the email is already an active member, or already has a pending invitation
+//   429 per-user workspace-mutation rate limit exhausted
 //
 // Authority: `requirePermission` resolves the caller's membership in
 // `:workspaceId` from the session. The workspace id in the path is only a claim; it
 // never becomes the tenant of a query on its own.
 //
-// Flow: an invitation row (status PENDING) is created, not a membership. Accepting
-// it is a separate endpoint that does not exist yet, so this route deliberately does
-// not activate anyone. The raw invite token is generated, hashed and discarded —
-// Phase 1 has no mail transport, and returning it would hand the caller a credential
-// they could use to bypass the accept step later.
+// Flow: an invitation row (status PENDING) is created, not a membership. The raw
+// token is hashed for storage. In a NON-PRODUCTION environment the response also
+// echoes the raw token as `devToken` so accept-invitation can be tested end to end
+// without a mail transport. That echo is deliberately absent in production and must
+// be replaced by the real invitation email before any production use (TD-8-R3).
 
 import crypto from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
@@ -35,6 +44,11 @@ import {
   readJsonObject,
   tenantContextFor,
 } from "@/lib/auth/route-support";
+import {
+  workspaceMutationRateLimit,
+  workspaceRateLimitResponse,
+} from "@/lib/auth/workspace-rate-limit";
+import { listWorkspaceMembers } from "@/lib/workspaces/data";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -47,6 +61,39 @@ function sha256Bytes(value: string): Uint8Array<ArrayBuffer> {
   return new Uint8Array(crypto.createHash("sha256").update(value, "utf8").digest());
 }
 
+export async function GET(
+  req: NextRequest,
+  context: { params: Promise<{ workspaceId: string }> },
+): Promise<NextResponse> {
+  try {
+    const { workspaceId } = await context.params;
+
+    // 401 for no session, 403 for both "not a member" and "no such workspace".
+    const grant = await requirePermission(req, workspaceId, "member.read");
+    const ctx = tenantContextFor(
+      grant,
+      grant.member?.tenantId ?? workspaceId,
+      req.headers.get("x-request-id"),
+    );
+
+    const result = await withTenant(ctx, async (db) => {
+      const workspace = await db.workspace.findFirst({
+        where: { id: ctx.tenantId },
+        select: { id: true, name: true, slug: true },
+      });
+      if (workspace === null) return null;
+
+      return { workspace, members: await listWorkspaceMembers(db) };
+    });
+
+    if (result === null) return jsonFail("Not found", 404);
+
+    return NextResponse.json(result, { status: 200, headers: NO_STORE });
+  } catch (error) {
+    return handleRouteError(error);
+  }
+}
+
 export async function POST(
   req: NextRequest,
   context: { params: Promise<{ workspaceId: string }> },
@@ -57,6 +104,9 @@ export async function POST(
     // Auth + authorization first: without a membership there is nothing to scope.
     const grant = await requirePermission(req, workspaceId, "member.invite");
     verifyCsrf(req);
+
+    const limit = workspaceMutationRateLimit(grant.session.userId);
+    if (!limit.allowed) return workspaceRateLimitResponse(limit);
 
     const payload = await readJsonObject(req);
     if (payload === null) return jsonFail("Invalid JSON body", 400);
@@ -80,6 +130,10 @@ export async function POST(
       select: { id: true },
     });
 
+    // Kept outside the callback only so the dev echo below can use it. It is never
+    // written to the database, the audit row, or a log line.
+    let rawInvitationToken: string | null = null;
+
     const outcome = await withTenant(ctx, async (db) => {
       const workspace = await db.workspace.findFirst({
         where: { id: ctx.tenantId },
@@ -101,9 +155,10 @@ export async function POST(
       });
       if (pending !== null) return { kind: "already-invited" } as const;
 
-      // The raw token exists only here: it is hashed for storage and never leaves
-      // this function (no mail transport in Phase 1, and no token in the response).
+      // The raw token exists only here and in the dev-only echo below. It is hashed
+      // for storage; it is never part of the audit metadata.
       const invitationToken = crypto.randomBytes(32).toString("base64url");
+      rawInvitationToken = invitationToken;
       const invitationId = crypto.randomUUID();
 
       await db.workspaceInvitation.create({
@@ -140,7 +195,17 @@ export async function POST(
     });
 
     return NextResponse.json(
-      { id: outcome.invitationId, email, roleKey, status: "pending" },
+      {
+        id: outcome.invitationId,
+        email,
+        roleKey,
+        status: "pending",
+        // DEV ONLY. `next dev` and the test harness run with NODE_ENV=development.
+        // Production must mail the token instead; this branch must stay dark there.
+        ...(process.env.NODE_ENV !== "production" && rawInvitationToken !== null
+          ? { devToken: rawInvitationToken, devTokenOnly: true }
+          : {}),
+      },
       { status: 200, headers: NO_STORE },
     );
   } catch (error) {

@@ -15,22 +15,73 @@ type Bucket = { count: number; resetAt: number };
 const buckets = new Map<string, Bucket>();
 
 /**
- * Returns true when the call is allowed, false when the window is exhausted.
- * The first call in a window creates the bucket with count 1.
+ * The result of one rate-limit decision.
+ *
+ * `retryAfterSeconds` is the value a 429 response should put in `Retry-After`: a
+ * whole number of seconds, never zero, so a client cannot be told to retry
+ * immediately inside an exhausted window.
  */
-export function checkRateLimit(key: string, limit: number, windowMs: number): boolean {
+export type RateLimitDecision = {
+  allowed: boolean;
+  limit: number;
+  remaining: number;
+  retryAfterSeconds: number;
+};
+
+function secondsUntil(resetAt: number, now: number): number {
+  return Math.max(1, Math.ceil((resetAt - now) / 1000));
+}
+
+/**
+ * Consumes one slot and returns the decision plus reset information.
+ *
+ * The first call in a window creates the bucket with count 1. A non-positive limit
+ * denies everything (fail-closed) instead of accidentally allowing unlimited use.
+ */
+export function consumeRateLimit(key: string, limit: number, windowMs: number): RateLimitDecision {
   const now = Date.now();
+
+  if (!Number.isFinite(limit) || limit <= 0) {
+    return { allowed: false, limit: 0, remaining: 0, retryAfterSeconds: 1 };
+  }
+
   const bucket = buckets.get(key);
 
   if (bucket === undefined || bucket.resetAt <= now) {
-    buckets.set(key, { count: 1, resetAt: now + windowMs });
-    return true;
+    const resetAt = now + Math.max(1, windowMs);
+    buckets.set(key, { count: 1, resetAt });
+    return {
+      allowed: true,
+      limit,
+      remaining: Math.max(0, limit - 1),
+      retryAfterSeconds: secondsUntil(resetAt, now),
+    };
   }
 
-  if (bucket.count >= limit) return false;
+  if (bucket.count >= limit) {
+    return {
+      allowed: false,
+      limit,
+      remaining: 0,
+      retryAfterSeconds: secondsUntil(bucket.resetAt, now),
+    };
+  }
 
   bucket.count += 1;
-  return true;
+  return {
+    allowed: true,
+    limit,
+    remaining: Math.max(0, limit - bucket.count),
+    retryAfterSeconds: secondsUntil(bucket.resetAt, now),
+  };
+}
+
+/**
+ * Returns true when the call is allowed, false when the window is exhausted.
+ * Kept as the stable boolean form used by the existing login limiter.
+ */
+export function checkRateLimit(key: string, limit: number, windowMs: number): boolean {
+  return consumeRateLimit(key, limit, windowMs).allowed;
 }
 
 /** Drops expired buckets. Safe to call at any time; intended for a worker tick. */

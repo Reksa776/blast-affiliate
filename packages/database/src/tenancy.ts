@@ -108,7 +108,18 @@ export function createTenantContext(input: TenantContextInput): TenantContext {
   } as unknown as TenantContext;
 }
 
-/** The only `where` fragment a repository may use to scope a tenant query. */
+/**
+ * The only `where` fragment a repository may use to scope a tenant query.
+ *
+ * This fragment is shaped for ordinary tenant-scoped models (`tenant_id` column).
+ * `Workspace` is the exception: it is the tenant aggregate itself, so `withTenant`
+ * scopes it on `id` instead, and the context value REPLACES a caller-supplied id
+ * rather than adding a second filter (TD-7F-R3). The replacement is still
+ * fail-closed — a foreign workspace row is never returned — but code that expects
+ * `null` for a foreign id will instead observe the caller's own workspace. Use
+ * `db.workspace.findFirst({ where: { id } })` only when the id has already been
+ * authorized (`requirePermission`), or check the returned id against the request.
+ */
 export function tenantScope(ctx: TenantContext): { tenantId: string } {
   return { tenantId: ctx.tenantId };
 }

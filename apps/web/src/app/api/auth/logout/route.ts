@@ -17,8 +17,8 @@ import { writeAudit } from "@affiliateos/database";
 
 import { getClientIp } from "@/lib/auth/middleware";
 import { CsrfError, verifyCsrf } from "@/lib/auth/csrf";
+import { getSessionCookieName } from "@/lib/auth/cookie-name";
 import {
-  SESSION_COOKIE_NAME,
   clearedSessionCookieOptions,
   destroySession,
   validateSession,
@@ -37,7 +37,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     throw error;
   }
 
-  const token = req.cookies.get(SESSION_COOKIE_NAME)?.value;
+  const cookieName = getSessionCookieName();
+  const token = req.cookies.get(cookieName)?.value;
   if (token !== undefined && token !== "") {
     // The session must be resolved before it is destroyed: the audit row needs the
     // actor, and afterwards the token maps to nothing.
@@ -63,7 +64,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     status: 204,
     headers: { "cache-control": "no-store" },
   });
-  response.cookies.set(SESSION_COOKIE_NAME, "", clearedSessionCookieOptions());
+  response.cookies.set(cookieName, "", clearedSessionCookieOptions());
 
   return response;
 }

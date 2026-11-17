@@ -12,6 +12,7 @@ import { randomUUID } from "node:crypto";
 import type { WorkspaceRole } from "@affiliateos/permissions";
 import type { NextRequest } from "next/server";
 
+import { getSessionCookieName } from "./cookie-name.ts";
 import { loadEnvForTests, requireTestDatabaseUrl } from "./test-env.ts";
 
 /** Points the process at TEST_DATABASE_URL and returns it. Never the dev database. */
@@ -81,7 +82,8 @@ export async function clearTestDatabase(): Promise<void> {
 export function fakeRequest(token?: string): NextRequest {
   return {
     cookies: {
-      get: (name: string) => (name === "session" && token !== undefined ? { value: token } : undefined),
+      get: (name: string) =>
+        name === getSessionCookieName() && token !== undefined ? { value: token } : undefined,
     },
     headers: new Headers(),
   } as unknown as NextRequest;

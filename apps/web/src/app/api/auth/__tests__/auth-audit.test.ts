@@ -32,6 +32,8 @@ process.env.DATABASE_URL = testDatabaseUrl;
 delete process.env.MIGRATE_DATABASE_URL;
 
 const { disconnectPrisma, systemDb } = await import("@affiliateos/database");
+const { getSessionCookieName } = await import("../../../../lib/auth/cookie-name.ts");
+const SESSION_COOKIE = getSessionCookieName();
 
 const PORT = 3418;
 const BASE = `http://127.0.0.1:${PORT}`;
@@ -215,7 +217,7 @@ describe("audit trail dari route auth", () => {
     );
 
     assert.equal(response.status, 200);
-    const sessionCookie = cookieValue(response, "session");
+    const sessionCookie = cookieValue(response, SESSION_COOKIE);
     assert.ok(sessionCookie.length > 0, "login harus mengembalikan cookie session");
 
     const rows = await auditRows();
@@ -267,7 +269,7 @@ describe("audit trail dari route auth", () => {
       { ip: IP_LOGIN, csrf: csrfLogin },
     );
     assert.equal(loginResponse.status, 200);
-    const sessionCookie = cookieValue(loginResponse, "session");
+    const sessionCookie = cookieValue(loginResponse, SESSION_COOKIE);
 
     const csrfLogout = await fetchCsrf(IP_LOGIN);
     const logoutResponse = await post("/api/auth/logout", {}, { ip: IP_LOGIN, csrf: csrfLogout, session: sessionCookie });
