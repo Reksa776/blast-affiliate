@@ -1,19 +1,39 @@
 // Public surface of @affiliateos/database.
 //
-// Checkpoint 6D: the raw PrismaClient is NO LONGER exported (closes the app-facing
-// half of F-6C-6). What leaves this package is deliberate:
+// The raw PrismaClient is NOT exported (Checkpoint 6D, closes the app-facing half
+// of F-6C-6). What leaves this package is deliberate:
 //
-//   - checkDatabaseHealth(): a fixed `SELECT 1` liveness probe.
-//   - disconnectPrisma(): shutdown helper for scripts and tests.
+//   withTenant(ctx, fn)   → a client confined to one tenant (Checkpoint 7B, Task C)
+//   systemDb()            → the raw client, for cross-tenant work only
+//   createTenantContext() → mints the branded context `withTenant` accepts
+//   checkDatabaseHealth() → a fixed `SELECT 1` liveness probe
+//   disconnectPrisma()    → shutdown helper for scripts and tests
 //
-// Still missing, and intentionally so: `withTenant(ctx)` and `systemDb()`. They
-// require `workspace_members` / `role_permissions` to exist, which needs migration
-// M1. Their security contract is written in docs/08-TENANT-ISOLATION-DESIGN.md;
-// they will replace this surface once they can be tested against real tables.
-//
-// Consequence today: an application module cannot reach an unscoped query client.
-// It also cannot query at all yet — which is correct, because no business table
-// exists and the authentication layer that mints a TenantContext is not built.
+// An application module still cannot obtain an unscoped query client by accident:
+// `withTenant` is the only request-path surface, and `systemDb` is marked
+// SYSTEM USE ONLY at every call site. The security contract is in
+// docs/08-TENANT-ISOLATION-DESIGN.md.
 
 export { disconnectPrisma } from "./client.js";
 export { checkDatabaseHealth } from "./health.js";
+export {
+  assertJobTenantContext,
+  assertSameTenant,
+  createTenantContext,
+  CrossTenantAccessError,
+  hasPermission,
+  TenantContextError,
+  tenantScope,
+  type TenantContext,
+  type TenantContextInput,
+} from "./tenancy.js";
+export {
+  APPEND_ONLY_MODELS,
+  systemDb,
+  tenantExtension,
+  TenantAppendOnlyError,
+  TenantModelAccessError,
+  TenantWriteScopeError,
+  withTenant,
+  type TenantScopedPrisma,
+} from "./tenant-db.js";
