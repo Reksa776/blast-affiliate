@@ -81,3 +81,4 @@ Thumbs.db
 # Local Node.js runtime
 /node-v24.22.3-linux-x64/
 /node-v24.22.3-linux-x64.tar.xz
+node-v*-linux-x64/
