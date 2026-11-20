@@ -78,3 +78,6 @@ Thumbs.db
 !.vscode/extensions.json
 *.swp
 *~
+# Local Node.js runtime
+/node-v24.22.3-linux-x64/
+/node-v24.22.3-linux-x64.tar.xz
