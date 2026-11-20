@@ -92,6 +92,20 @@ const TENANT_SCOPE_FIELD: Readonly<Record<string, TenantScopeField>> = {
   MemberRole: "tenantId",
   AuditLog: "tenantId",
   BackgroundJob: "tenantId",
+  Creator: "tenantId",
+  CreatorProfile: "tenantId",
+  CreatorAssignment: "tenantId",
+  CreatorActivity: "tenantId",
+  CreatorStatusHistory: "tenantId",
+  CreatorTag: "tenantId",
+  CreatorTagAssignment: "tenantId",
+  CreatorNote: "tenantId",
+  CreatorBlacklist: "tenantId",
+  Campaign: "tenantId",
+  CampaignCreator: "tenantId",
+  CampaignContent: "tenantId",
+  CampaignAdCode: "tenantId",
+  CampaignStatusHistory: "tenantId",
   // `background_job_attempts` has no tenant_id: it is reachable only through its
   // parent job, so direct access is refused like the platform models below.
 };
@@ -115,7 +129,13 @@ const NON_TENANT_MODELS: ReadonlySet<string> = new Set([
  * statement (P0.7). Reads and inserts stay available; `upsert` is refused because its
  * update half is still an update.
  */
-export const APPEND_ONLY_MODELS: ReadonlySet<string> = new Set(["AuditLog"]);
+export const APPEND_ONLY_MODELS: ReadonlySet<string> = new Set([
+  "AuditLog",
+  "CreatorActivity",
+  "CreatorStatusHistory",
+  "CampaignStatusHistory",
+  "CampaignContent",
+]);
 
 /** The only operations allowed on an append-only model. */
 const APPEND_ONLY_OPERATIONS: ReadonlySet<string> = new Set([

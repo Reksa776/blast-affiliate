@@ -34,6 +34,8 @@ export default async function WorkspaceOverviewPage({ params }: PageProps) {
         office,
         memberCount: await db.workspaceMember.count(),
         auditCount: await db.auditLog.count(),
+        creatorCount: await db.creator.count({ where: { deletedAt: null } }),
+        campaignCount: await db.campaign.count({ where: { deletedAt: null } }),
         canAudit: grant.platformAdmin || grant.permissions.includes("audit.read"),
       };
     });
@@ -52,7 +54,17 @@ export default async function WorkspaceOverviewPage({ params }: PageProps) {
         <p className="mt-1 font-mono text-xs text-slate-400">{data.office.slug}</p>
       </header>
 
-      <section className="grid gap-3 sm:grid-cols-3">
+      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-4">
+          <p className="text-xs uppercase tracking-wide text-slate-400">Creators</p>
+          <p className="mt-2 text-2xl font-semibold">{data.creatorCount}</p>
+          <Link className="mt-2 inline-block text-xs text-slate-300 hover:underline" href={`/workspaces/${workspaceId}/creators`}>Open CRM →</Link>
+        </div>
+        <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-4">
+          <p className="text-xs uppercase tracking-wide text-slate-400">Campaigns</p>
+          <p className="mt-2 text-2xl font-semibold">{data.campaignCount}</p>
+          <Link className="mt-2 inline-block text-xs text-slate-300 hover:underline" href={`/workspaces/${workspaceId}/campaigns`}>Manage campaigns →</Link>
+        </div>
         <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-4">
           <p className="text-xs uppercase tracking-wide text-slate-400">Members</p>
           <p className="mt-2 text-2xl font-semibold">{data.memberCount}</p>
@@ -85,12 +97,9 @@ export default async function WorkspaceOverviewPage({ params }: PageProps) {
         </div>
       </section>
 
-      <section className="rounded-lg border border-slate-800 bg-slate-900/60 p-5 text-sm text-slate-300">
-        <h2 className="text-lg font-semibold text-slate-100">Phase 2 scope</h2>
-        <p className="mt-2">
-          Workspace, member, invitation and office settings sudah aktif. Modul absensi
-          (GPS, foto, revisi kehadiran) adalah Phase 3 dan belum tersedia di sini.
-        </p>
+      <section className="rounded-lg border border-violet-900/60 bg-violet-950/20 p-5 text-sm text-slate-300">
+        <h2 className="text-lg font-semibold text-slate-100">Mulai operasional</h2>
+        <p className="mt-2">Tambahkan kreator ke CRM, catat perkembangan hubungan, lalu susun campaign. Data TikTok langsung belum masuk sampai koneksi dan akses API disiapkan.</p>
       </section>
     </main>
   );

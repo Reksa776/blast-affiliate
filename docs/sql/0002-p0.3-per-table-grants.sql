@@ -6,7 +6,8 @@
 --          operator can review and run it with `sudo mariadb < this-file`.
 --
 -- SCOPE  : DML only, per table. NO `ON affiliateos.*` grant anywhere.
---          `audit_logs` gets SELECT, INSERT only (append-only).
+--          `audit_logs`, creator history/activity, campaign briefs/history get
+--          SELECT, INSERT only (append-only).
 --          `_prisma_migrations` gets nothing (Prisma-internal, migrate account
 --          already owns it).
 --          `affiliateos_migrate` is not touched.
@@ -35,14 +36,14 @@ SELECT user, host FROM mysql.user WHERE user IN ('affiliateos_app', 'affiliateos
 SELECT COUNT(*) AS base_tables
 FROM information_schema.TABLES
 WHERE table_schema = 'affiliateos' AND table_type = 'BASE TABLE';
--- expect: 14  (13 business tables + _prisma_migrations)
+-- expect after CRM and campaign migrations: 28 (27 business tables + _prisma_migrations)
 
 SHOW GRANTS FOR 'affiliateos_app'@'localhost';
 -- expect: exactly one line, `GRANT USAGE ON *.*`
 
 
 -- -----------------------------------------------------------------------------
--- STEP 1 — BLOCK A: @'localhost'  (12 business tables, full DML)
+-- STEP 1 — BLOCK A: @'localhost' (22 business tables full DML + 4 append-only)
 -- Generated from information_schema.tables, table_name <> 'audit_logs'
 -- -----------------------------------------------------------------------------
 GRANT SELECT, INSERT, UPDATE, DELETE ON `affiliateos`.`background_jobs` TO 'affiliateos_app'@'localhost';
@@ -57,6 +58,20 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON `affiliateos`.`users` TO 'affiliateos_ap
 GRANT SELECT, INSERT, UPDATE, DELETE ON `affiliateos`.`workspace_invitations` TO 'affiliateos_app'@'localhost';
 GRANT SELECT, INSERT, UPDATE, DELETE ON `affiliateos`.`workspace_members` TO 'affiliateos_app'@'localhost';
 GRANT SELECT, INSERT, UPDATE, DELETE ON `affiliateos`.`workspaces` TO 'affiliateos_app'@'localhost';
+GRANT SELECT, INSERT, UPDATE, DELETE ON `affiliateos`.`creators` TO 'affiliateos_app'@'localhost';
+GRANT SELECT, INSERT, UPDATE, DELETE ON `affiliateos`.`creator_profiles` TO 'affiliateos_app'@'localhost';
+GRANT SELECT, INSERT, UPDATE, DELETE ON `affiliateos`.`creator_assignments` TO 'affiliateos_app'@'localhost';
+GRANT SELECT, INSERT ON `affiliateos`.`creator_activities` TO 'affiliateos_app'@'localhost';
+GRANT SELECT, INSERT ON `affiliateos`.`creator_status_histories` TO 'affiliateos_app'@'localhost';
+GRANT SELECT, INSERT, UPDATE, DELETE ON `affiliateos`.`creator_tags` TO 'affiliateos_app'@'localhost';
+GRANT SELECT, INSERT, UPDATE, DELETE ON `affiliateos`.`creator_tag_assignments` TO 'affiliateos_app'@'localhost';
+GRANT SELECT, INSERT, UPDATE, DELETE ON `affiliateos`.`creator_notes` TO 'affiliateos_app'@'localhost';
+GRANT SELECT, INSERT, UPDATE, DELETE ON `affiliateos`.`creator_blacklists` TO 'affiliateos_app'@'localhost';
+GRANT SELECT, INSERT, UPDATE, DELETE ON `affiliateos`.`campaigns` TO 'affiliateos_app'@'localhost';
+GRANT SELECT, INSERT, UPDATE, DELETE ON `affiliateos`.`campaign_creators` TO 'affiliateos_app'@'localhost';
+GRANT SELECT, INSERT ON `affiliateos`.`campaign_contents` TO 'affiliateos_app'@'localhost';
+GRANT SELECT, INSERT, UPDATE, DELETE ON `affiliateos`.`campaign_ad_codes` TO 'affiliateos_app'@'localhost';
+GRANT SELECT, INSERT ON `affiliateos`.`campaign_status_histories` TO 'affiliateos_app'@'localhost';
 
 -- audit_logs: append-only from the app's perspective
 GRANT SELECT, INSERT ON `affiliateos`.`audit_logs` TO 'affiliateos_app'@'localhost';
@@ -79,13 +94,27 @@ GRANT SELECT, INSERT ON `affiliateos`.`audit_logs` TO 'affiliateos_app'@'localho
 -- GRANT SELECT, INSERT, UPDATE, DELETE ON `affiliateos`.`workspace_invitations` TO 'affiliateos_app'@'127.0.0.1';
 -- GRANT SELECT, INSERT, UPDATE, DELETE ON `affiliateos`.`workspace_members` TO 'affiliateos_app'@'127.0.0.1';
 -- GRANT SELECT, INSERT, UPDATE, DELETE ON `affiliateos`.`workspaces` TO 'affiliateos_app'@'127.0.0.1';
+-- GRANT SELECT, INSERT, UPDATE, DELETE ON `affiliateos`.`creators` TO 'affiliateos_app'@'127.0.0.1';
+-- GRANT SELECT, INSERT, UPDATE, DELETE ON `affiliateos`.`creator_profiles` TO 'affiliateos_app'@'127.0.0.1';
+-- GRANT SELECT, INSERT, UPDATE, DELETE ON `affiliateos`.`creator_assignments` TO 'affiliateos_app'@'127.0.0.1';
+-- GRANT SELECT, INSERT ON `affiliateos`.`creator_activities` TO 'affiliateos_app'@'127.0.0.1';
+-- GRANT SELECT, INSERT ON `affiliateos`.`creator_status_histories` TO 'affiliateos_app'@'127.0.0.1';
+-- GRANT SELECT, INSERT, UPDATE, DELETE ON `affiliateos`.`creator_tags` TO 'affiliateos_app'@'127.0.0.1';
+-- GRANT SELECT, INSERT, UPDATE, DELETE ON `affiliateos`.`creator_tag_assignments` TO 'affiliateos_app'@'127.0.0.1';
+-- GRANT SELECT, INSERT, UPDATE, DELETE ON `affiliateos`.`creator_notes` TO 'affiliateos_app'@'127.0.0.1';
+-- GRANT SELECT, INSERT, UPDATE, DELETE ON `affiliateos`.`creator_blacklists` TO 'affiliateos_app'@'127.0.0.1';
+-- GRANT SELECT, INSERT, UPDATE, DELETE ON `affiliateos`.`campaigns` TO 'affiliateos_app'@'127.0.0.1';
+-- GRANT SELECT, INSERT, UPDATE, DELETE ON `affiliateos`.`campaign_creators` TO 'affiliateos_app'@'127.0.0.1';
+-- GRANT SELECT, INSERT ON `affiliateos`.`campaign_contents` TO 'affiliateos_app'@'127.0.0.1';
+-- GRANT SELECT, INSERT, UPDATE, DELETE ON `affiliateos`.`campaign_ad_codes` TO 'affiliateos_app'@'127.0.0.1';
+-- GRANT SELECT, INSERT ON `affiliateos`.`campaign_status_histories` TO 'affiliateos_app'@'127.0.0.1';
 -- GRANT SELECT, INSERT ON `affiliateos`.`audit_logs` TO 'affiliateos_app'@'127.0.0.1';
 
 FLUSH PRIVILEGES;
 
 
 -- -----------------------------------------------------------------------------
--- STEP 3 — POST-CHECK (as admin): expect 13 table grants, NO `ON affiliateos.*`
+-- STEP 3 — POST-CHECK (as admin): expect 27 table grants, NO `ON affiliateos.*`
 -- -----------------------------------------------------------------------------
 SHOW GRANTS FOR 'affiliateos_app'@'localhost';
 SHOW GRANTS FOR 'affiliateos_migrate'@'localhost';

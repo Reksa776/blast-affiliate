@@ -3,6 +3,7 @@ import Link from "next/link";
 import { AuthError } from "@/lib/auth/middleware";
 import { requirePageAuth } from "@/lib/auth/page-auth";
 import { listWorkspacesForUser } from "@/lib/workspaces/data";
+import { WorkspaceCreateForm } from "@/components/workspace-create-form";
 
 export const dynamic = "force-dynamic";
 
@@ -34,18 +35,22 @@ export default async function WorkspacesPage() {
     <main className="mx-auto flex min-h-screen max-w-4xl flex-col gap-6 px-6 py-12">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-xs font-medium uppercase tracking-[0.2em] text-slate-400">Phase 2</p>
+          <p className="text-xs font-medium uppercase tracking-[0.2em] text-slate-400">AffiliateOS</p>
           <h1 className="text-3xl font-semibold tracking-tight">Workspaces</h1>
           <p className="mt-1 text-sm text-slate-400">
-            Only workspaces where you hold an active membership are listed.
+            Workspace tempat kamu menjadi anggota aktif.
           </p>
         </div>
       </header>
 
       {workspaces.length === 0 ? (
-        <p className="rounded-lg border border-slate-800 bg-slate-900/60 p-5 text-sm text-slate-300">
-          You are not an active member of any workspace yet. Ask an owner for an invitation.
-        </p>
+        <section className="rounded-lg border border-slate-800 bg-slate-900/60 p-5">
+          <h2 className="text-lg font-semibold">Belum ada workspace</h2>
+          <p className="mt-2 max-w-2xl text-sm text-slate-300">
+            Kalau ini setup pertama, buat workspace dan akunmu otomatis menjadi owner. Kalau kamu seharusnya bergabung ke workspace yang sudah ada, minta link undangan dari owner.
+          </p>
+          <WorkspaceCreateForm />
+        </section>
       ) : (
         <ul className="grid gap-3">
           {workspaces.map((workspace) => (

@@ -57,6 +57,12 @@ export default async function WorkspaceLayout({ children, params }: LayoutProps)
 
   const navigation = [
     { href: `/workspaces/${workspaceId}`, label: "Overview" },
+    ...(grant.platformAdmin || grant.permissions.includes("creator.read")
+      ? [{ href: `/workspaces/${workspaceId}/creators`, label: "Creator CRM" }]
+      : []),
+    ...(grant.platformAdmin || grant.permissions.includes("campaign.read")
+      ? [{ href: `/workspaces/${workspaceId}/campaigns`, label: "Campaigns" }]
+      : []),
     { href: `/workspaces/${workspaceId}/members`, label: "Members" },
     { href: `/workspaces/${workspaceId}/office`, label: "Office settings" },
     ...(canAudit ? [{ href: `/workspaces/${workspaceId}/audit`, label: "Audit log" }] : []),

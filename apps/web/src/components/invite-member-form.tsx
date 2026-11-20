@@ -21,6 +21,7 @@ export function InviteMemberForm({ workspaceId, roles }: InviteMemberFormProps) 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [invitationLink, setInvitationLink] = useState<string | null>(null);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -52,11 +53,13 @@ export function InviteMemberForm({ workspaceId, roles }: InviteMemberFormProps) 
       }
 
       setEmail("");
-      setMessage(
-        body.devToken === undefined
-          ? "Invitation created."
-          : "Invitation created. A dev-only token was issued in the API response.",
-      );
+      if (body.devToken !== undefined) {
+        setInvitationLink(`${window.location.origin}/accept-invitation?token=${encodeURIComponent(body.devToken)}`);
+        setMessage("Undangan dibuat. Bagikan link ini secara pribadi kepada penerima.");
+      } else {
+        setInvitationLink(null);
+        setMessage("Undangan tercatat, tetapi email belum dikonfigurasi sehingga link belum terkirim.");
+      }
       router.refresh();
     } catch {
       setError("Network error. Try again.");
@@ -109,6 +112,15 @@ export function InviteMemberForm({ workspaceId, roles }: InviteMemberFormProps) 
 
       {error === null ? null : <p className="text-sm text-red-300">{error}</p>}
       {message === null ? null : <p className="text-sm text-emerald-300">{message}</p>}
+      {invitationLink ? (
+        <div className="rounded-md border border-slate-700 bg-slate-950 p-3">
+          <label className="text-xs text-slate-400">Link undangan (token rahasia)</label>
+          <div className="mt-1 flex gap-2">
+            <input className="min-w-0 flex-1 rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-xs text-slate-200" readOnly value={invitationLink} />
+            <button className="rounded border border-slate-700 px-2 text-xs" type="button" onClick={() => void navigator.clipboard.writeText(invitationLink).catch(() => setError("Browser tidak bisa menyalin link. Salin teksnya manual."))}>Salin</button>
+          </div>
+        </div>
+      ) : null}
     </form>
   );
 }

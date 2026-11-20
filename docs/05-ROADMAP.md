@@ -3,6 +3,19 @@
 > Phase 0 deliverable. Each phase starts only after the previous phase report is
 > reviewed and **explicitly approved**. Nothing here authorizes Phase 1.
 
+## Current implementation snapshot (2026-11-20)
+
+| Area | Current state |
+|---|---|
+| Identity, workspace, RBAC, audit | Implemented in the existing app; see `PHASE-1-2-CLOSURE.md`. |
+| Creator CRM | Local workflow implemented: create/list/search/filter, pipeline changes, profile notes, interaction notes, tags, assignment, blacklist, CSV import/export. The CRM migration is deployed to the current local database. |
+| Campaign planning | Local workflow implemented: create/status, creator links, versioned briefs, manual batch invite preparation for up to 100 creators, and recorded failed attempts with manual retry. The campaign migrations are deployed to the current local database. Campaign shop label is manual text until a real shop connection exists. |
+| Team onboarding | First account can create a workspace and become its owner. Invite tokens can create an account and activate membership; development UI exposes a one-time link for manual sharing. Production email delivery is still missing. |
+| TikTok connection and live data | Not implemented. Partner Center approval and credentials are still prerequisites. |
+| TikTok/WhatsApp/email message delivery, outreach queue/quota engine, analytics, production deployment | Not implemented. The campaign bulk invite tool creates personalized message text for manual sending and records success/failure reported by the operator; it cannot observe or retry external sends automatically. |
+
+The current local database has all tracked migrations applied, the permission catalog seeded, and runtime grants verified for the new tables. Typecheck and a webpack production build pass. Automated test suites and production deployment have not been run.
+
 ---
 
 ## 0. Sequencing Principle

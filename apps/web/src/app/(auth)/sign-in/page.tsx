@@ -51,7 +51,8 @@ export default function SignInPage() {
         return;
       }
 
-      router.push("/workspaces");
+      const next = new URLSearchParams(window.location.search).get("next");
+      router.push(next?.startsWith("/accept-invitation") && !next.startsWith("//") ? next : "/workspaces");
       router.refresh();
     } catch {
       setError("Kesalahan jaringan. Coba lagi.");
@@ -111,9 +112,9 @@ export default function SignInPage() {
       </form>
 
       <p className="text-xs text-slate-500">
-        Belum punya akun? Registrasi hanya terbuka untuk akun pertama (bootstrap).{" "}
-        <Link className="text-slate-300 underline-offset-2 hover:underline" href="/">
-          Kembali ke beranda
+        Belum punya akun? Registrasi hanya terbuka untuk akun pertama. {" "}
+        <Link className="text-slate-300 underline-offset-2 hover:underline" href="/register">
+          Buat akun pertama
         </Link>
       </p>
     </main>
