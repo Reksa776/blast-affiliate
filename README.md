@@ -31,7 +31,7 @@ Data CRM dan campaign diinput manual dan terpisah per workspace. Angka performa,
 
 - Linux VPS/server yang dikelola sendiri, dengan domain dan HTTPS.
 - Node.js **24 atau lebih baru** dan npm yang cocok dengan lockfile.
-- MariaDB dengan database/schema `affiliateos` yang sudah dibuat.
+- MariaDB lokal di VPS. Jalur cepat membuat schema `affiliateos` dan `affiliateos_shadow`; jalur manual membutuhkan schema yang dibuat DBA.
 - Nginx atau reverse proxy HTTPS lain di depan Next.js.
 - Akun database runtime terpisah dari akun migrasi. Jangan menjalankan aplikasi sebagai MariaDB `root`.
 - Backup database sebelum migrasi dan prosedur pemulihan yang pernah dicoba.
@@ -39,6 +39,19 @@ Data CRM dan campaign diinput manual dan terpisah per workspace. Angka performa,
 Contoh di bawah mengasumsikan Ubuntu/Debian, checkout aplikasi di `/opt/affiliateos`, domain `affiliateos.example.com`, dan port lokal `3000`. Sesuaikan lokasi, domain, username Linux, serta pengelolaan TLS dengan servermu.
 
 ## Deploy production di VPS
+
+### Jalur cepat untuk VPS baru
+
+Setelah clone repo, install dependency, lalu jalankan helper provisioning:
+
+```bash
+npm ci
+bash scripts/provision-vps-database.sh
+```
+
+Helper ini hanya untuk **database AffiliateOS baru**: ia menolak jika akun DB bernama AffiliateOS, tabel aplikasi, atau `.env` sudah ada. Ia membuat tiga password acak khusus VPS, menyimpan URL lengkap ke `.env` mode `600`, membuat `/etc/affiliateos/web.env` berisi credential runtime saja, menjalankan migration, memberi grant per-tabel runtime, build, dan seed permission. Tidak ada password yang dicetak ke terminal. Perlu `sudo mariadb` yang bekerja via socket lokal serta user/group Linux service `affiliateos` sudah dibuat. Setelah berhasil, lanjut ke langkah [jalankan aplikasi sebagai service](#7-jalankan-aplikasi-sebagai-service); jangan ulangi langkah manual 2–6.
+
+Untuk production yang database-nya sudah ada atau dikelola DBA, gunakan langkah manual di bawah, setelah memastikan backup, akun, dan grant cocok dengan host/database tersebut.
 
 ### 1. Siapkan server dan checkout kode
 
