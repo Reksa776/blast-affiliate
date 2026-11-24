@@ -8,7 +8,7 @@
 set -euo pipefail
 umask 077
 
-if [[ ! -f package.json || ! -f prisma.config.ts || ! -x node_modules/.bin/prisma ]]; then
+if [[ ! -f package.json || ! -f packages/database/prisma.config.ts || ! -x node_modules/.bin/prisma ]]; then
   echo "Run this from the AffiliateOS repository root after npm ci." >&2
   exit 1
 fi
