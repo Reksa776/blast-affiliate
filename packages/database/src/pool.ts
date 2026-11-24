@@ -26,6 +26,8 @@ export type MariaDbPoolOptions = {
   user: string;
   password: string;
   database: string;
+  /** Needed by MySQL 8 caching_sha2_password over a local, non-TLS TCP socket. */
+  allowPublicKeyRetrieval?: boolean;
   connectionLimit: number;
   minimumIdle: number;
   acquireTimeout: number;
@@ -77,6 +79,7 @@ export function parseConnectionUrl(raw: string): {
   user: string;
   password: string;
   database: string;
+  allowPublicKeyRetrieval?: boolean;
 } {
   let parsed: URL;
   try {
@@ -97,12 +100,23 @@ export function parseConnectionUrl(raw: string): {
     throw new Error("DATABASE_URL does not name a database user.");
   }
 
+  const allowPublicKeyRetrieval = parsed.searchParams.get("allowPublicKeyRetrieval") === "true";
+  if (
+    allowPublicKeyRetrieval &&
+    !["localhost", "127.0.0.1", "::1"].includes(parsed.hostname.toLowerCase())
+  ) {
+    throw new Error(
+      "allowPublicKeyRetrieval=true is only permitted for a loopback database host. Use TLS for remote MySQL connections.",
+    );
+  }
+
   return {
     host: parsed.hostname,
     port: parsed.port === "" ? 3306 : Number(parsed.port),
     user: decodeURIComponent(parsed.username),
     password: decodeURIComponent(parsed.password),
     database,
+    ...(allowPublicKeyRetrieval ? { allowPublicKeyRetrieval: true } : {}),
   };
 }
 

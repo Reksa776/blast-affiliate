@@ -49,7 +49,16 @@ npm ci
 bash scripts/provision-vps-database.sh
 ```
 
-Helper ini hanya untuk **database AffiliateOS baru**: ia menolak jika akun DB bernama AffiliateOS, tabel aplikasi, atau `.env` sudah ada. Ia membuat tiga password acak khusus VPS, menyimpan URL lengkap ke `.env` mode `600`, membuat `/etc/affiliateos/web.env` berisi credential runtime saja, menjalankan migration, memberi grant per-tabel runtime, build, dan seed permission. Tidak ada password yang dicetak ke terminal. Perlu `sudo mariadb` yang bekerja via socket lokal serta user/group Linux service `affiliateos` sudah dibuat. Setelah berhasil, lanjut ke langkah [jalankan aplikasi sebagai service](#7-jalankan-aplikasi-sebagai-service); jangan ulangi langkah manual 2–6.
+Helper ini hanya untuk **database AffiliateOS baru**: ia menolak jika akun DB bernama AffiliateOS, tabel aplikasi, atau `.env` sudah ada. Ia membuat tiga password acak khusus VPS, menyimpan URL lengkap ke `.env` mode `600`, membuat `/etc/affiliateos/web.env` berisi credential runtime saja, menjalankan migration, memberi grant per-tabel runtime, build, dan seed permission. Tidak ada password yang dicetak ke terminal. Perlu client `mysql` atau `mariadb`, akses admin database lokal lewat `sudo`, serta user/group Linux service `affiliateos` sudah dibuat. Setelah berhasil, lanjut ke langkah [jalankan aplikasi sebagai service](#7-jalankan-aplikasi-sebagai-service); jangan ulangi langkah manual 2–6.
+
+Jika MySQL root memakai password (login seperti `sudo mysql -u root -p`), simpan login path untuk user root MySQL agar helper tidak meminta atau menampilkan password di setiap command:
+
+```bash
+sudo mysql_config_editor set --login-path=affiliateos-admin --host=localhost --user=root --password
+MYSQL_LOGIN_PATH=affiliateos-admin bash scripts/provision-vps-database.sh
+```
+
+`mysql_config_editor` meminta password secara interaktif dan menyimpannya di konfigurasi login MySQL milik root. Jika akses admin database lokal sudah bekerja tanpa password, cukup jalankan `bash scripts/provision-vps-database.sh`.
 
 Untuk production yang database-nya sudah ada atau dikelola DBA, gunakan langkah manual di bawah, setelah memastikan backup, akun, dan grant cocok dengan host/database tersebut.
 
@@ -78,7 +87,7 @@ nano .env
 Isi nilai sesuai environment. Bentuk URL database:
 
 ```dotenv
-DATABASE_URL="mysql://affiliateos_app:<PASSWORD-URL-ENCODED>@127.0.0.1:3306/affiliateos"
+DATABASE_URL="mysql://affiliateos_app:<PASSWORD-URL-ENCODED>@127.0.0.1:3306/affiliateos?allowPublicKeyRetrieval=true"
 MIGRATE_DATABASE_URL="mysql://affiliateos_migrate:<PASSWORD-URL-ENCODED>@127.0.0.1:3306/affiliateos"
 SHADOW_DATABASE_URL="mysql://affiliateos_shadow:<PASSWORD-URL-ENCODED>@127.0.0.1:3306/affiliateos_shadow"
 TRUST_PROXY=true
